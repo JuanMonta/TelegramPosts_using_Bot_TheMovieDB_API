@@ -1,0 +1,192 @@
+<div class="app">
+  <aside class="pane">
+    <header class="pane-cab">
+      <div class="avatar avatar-canal" aria-hidden="true">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M9.04 15.6 8.6 19.3c.12 0 .24-.04.33-.13l2.05-1.87 4.25 3.12c.78.43 1.33.21 1.54-.72l2.8-13.14c.25-1.16-.44-1.61-1.23-1.27L2.17 8.47c-1.17.45-1.16 1.11-.2 1.39l4.02 1.25 9.32-5.87c.44-.27.85-.12.52.17l-7.55 6.8-2.24 7.39z"/></svg>
+      </div>
+      <div class="pane-titulo">
+        <h1>CANAL DE VIDEOS</h1>
+        <span class="tally">{{titulos.length}} guardados · {{borradores}} borrador<ng-container *ngIf="borradores !== 1">es</ng-container> · {{publicados}} publ<ng-container *ngIf="publicados !== 1">icados</ng-container><ng-container *ngIf="publicados === 1">icado</ng-container></span>
+      </div>
+    </header>
+
+    <div class="busqueda">
+      <svg class="busq-ico" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.2" y2="16.2"/></svg>
+      <input
+        class="busq-entrada caret-blue"
+        [(ngModel)]="busqueda"
+        placeholder="Buscar en TMDB… (id:438631 o el enlace de TMDB)"
+        (keyup.enter)="buscar()"
+        (keyup.escape)="limpiarBusqueda()"
+        autocomplete="off"
+      />
+      <button *ngIf="buscado || busqueda" class="busq-limpiar" (click)="limpiarBusqueda()" aria-label="Limpiar" title="Limpiar">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
+      </button>
+    </div>
+
+    <div class="pane-cuerpo">
+      <mat-progress-bar *ngIf="cargando" mode="indeterminate" class="barra-carga"></mat-progress-bar>
+
+      <div *ngIf="!cargando && errorBackend" class="aviso rise-in">
+        <div class="aviso-txt">
+          <strong>Sin conexión.</strong>
+          <span>{{errorBackend}}</span>
+        </div>
+        <button class="enlace" (click)="cargar()">REINTENTAR</button>
+      </div>
+
+      <!-- resultados de búsqueda -->
+      <ng-container *ngIf="buscado">
+        <div *ngIf="buscando" class="fila-info tally rise-in">Buscando en TMDB…</div>
+
+        <ng-container *ngIf="!buscando">
+          <div *ngIf="errorBusqueda" class="aviso aviso-busq rise-in">
+            <div class="aviso-txt">
+              <strong>No se pudo buscar.</strong>
+              <span>{{errorBusqueda}}</span>
+            </div>
+            <button class="enlace" (click)="buscar()">REINTENTAR</button>
+          </div>
+
+          <ng-container *ngIf="!errorBusqueda">
+            <div class="fila-info tally rise-in">
+              {{resultados.length}} resultado<ng-container *ngIf="resultados.length !== 1">s</ng-container> en TMDB · clic para guardar
+            </div>
+            <ul class="lista">
+              <li
+                *ngFor="let hit of resultados"
+                class="fila rise-in"
+                [class.fila-cargando]="guardandoTmdb[hit.id]"
+                (click)="guardar(hit)"
+                tabindex="0"
+                (keyup.enter)="guardar(hit)"
+              >
+                <div class="foto" *ngIf="poster(hit)" [style.backgroundImage]="'url(' + poster(hit) + ')'"></div>
+                <div class="foto foto-mono" *ngIf="!poster(hit)">
+                  <span>{{nombreTitulo(hit.titulo)}}</span>
+                </div>
+                <div class="fila-main">
+                  <div class="fila-nombre">{{hit.titulo}}</div>
+                  <div class="fila-sub">
+                    <span class="chip">{{tipo(hit.media_type)}}</span>
+                    <span *ngIf="hit.anio" class="dimmed">{{hit.anio}}</span>
+                    <span *ngIf="hit.overview" class="fila-sinopsis">{{hit.overview}}</span>
+                  </div>
+                </div>
+                <div class="fila-der">
+                  <span class="spinner" *ngIf="guardandoTmdb[hit.id]" aria-label="Guardando"></span>
+                  <svg *ngIf="!guardandoTmdb[hit.id]" class="add" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                </div>
+              </li>
+            </ul>
+            <div *ngIf="!resultados.length" class="vacio rise-in">
+              <div class="vacio-txt">Sin resultados para “{{busqueda}}”. Prueba otro término.</div>
+              <div class="sugerir" *ngIf="sugerencia && !buscando">
+                <div class="sugerir-foto" *ngIf="sugerencia.poster_path" [style.backgroundImage]="'url(' + posterUrl(sugerencia.poster_path) + ')'"></div>
+                <div class="sugerir-txt">
+                  <span class="sugerir-head">¿Quisiste decir…</span>
+                  <span class="sugerir-titulo">{{sugerencia.titulo}}<ng-container *ngIf="sugerencia.anio"> · {{sugerencia.anio}}</ng-container></span>
+                </div>
+                <button class="enlace" (click)="buscarSugerida()">SÍ, BUSCAR</button>
+              </div>
+              <button class="enlace" (click)="limpiarBusqueda()">VOLVER A LA LISTA</button>
+            </div>
+          </ng-container>
+        </ng-container>
+      </ng-container>
+
+      <!-- lista de títulos guardados -->
+      <ng-container *ngIf="!buscado">
+        <ul class="lista" *ngIf="titulos.length">
+          <li
+            *ngFor="let t of titulos"
+            class="fila rise-in"
+            (click)="abrir(t)"
+            tabindex="0"
+            (keyup.enter)="abrir(t)"
+          >
+            <div class="foto" *ngIf="poster(t)" [style.backgroundImage]="'url(' + poster(t) + ')'"></div>
+            <div class="foto foto-mono" *ngIf="!poster(t)">
+              <span>{{nombreTitulo(nombre(t))}}</span>
+            </div>
+            <div class="fila-main">
+              <div class="fila-nombre">{{nombre(t)}}</div>
+              <div class="fila-sub">
+                <span class="chip chip-format">{{tipo(t.tipo)}}</span>
+                <span *ngIf="t.anio" class="dimmed">{{t.anio}}</span>
+                <span *ngIf="t.rating" class="tally">★ {{t.rating.toFixed(1)}}</span>
+                <span *ngIf="t.generos" class="fila-sinopsis">{{t.generos}}</span>
+              </div>
+            </div>
+            <div class="fila-der">
+              <span *ngIf="t.estado === 'borrador'" class="punto" title="Borrador"></span>
+              <span *ngIf="t.estado === 'publicado'" class="checks" title="Publicado">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 12 9 17 20 6"/><polyline points="12 12 16 16 20 12"/></svg>
+              </span>
+            </div>
+          </li>
+        </ul>
+
+        <div *ngIf="!cargando && !titulos.length" class="vacio rise-in">
+          <div class="foto foto-gigante"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M15.5 4.5 3.4 10.2c-.8.4-.7 1.5.1 1.8l3.9 1.4 1.7 3.2 4.1-4.6"/></svg></div>
+          <div class="vacio-txt">Aún no hay nada guardado.<br/>Busca una película o serie arriba para empezar el canal.</div>
+        </div>
+      </ng-container>
+    </div>
+  </aside>
+
+  <section class="escena">
+    <ng-container *ngIf="cargando">
+      <div class="escena-cab sk"></div>
+      <div class="bollo bollo-esqueleto rise-in">
+        <div class="bollo-media esqueleto-media sk"></div>
+        <div class="sk linea l1"></div>
+        <div class="sk linea l2"></div>
+        <div class="sk linea l3"></div>
+      </div>
+    </ng-container>
+
+    <ng-container *ngIf="!cargando && errorBackend">
+      <div class="escena-titulo tally">El canal espera al backend</div>
+      <p class="escena-txt dimmed">Conectá el backend en el puerto 9000 ({{errorBackend}}) y reintentá.</p>
+      <button class="boton-accion" (click)="cargar()">REINTENTAR CARGA</button>
+    </ng-container>
+
+    <ng-container *ngIf="!cargando && !errorBackend && panel">
+      <div class="escena-cab">
+        <div class="avatar avatar-canal mini" aria-hidden="true">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M9.04 15.6 8.6 19.3c.12 0 .24-.04.33-.13l2.05-1.87 4.25 3.12c.78.43 1.33.21 1.54-.72l2.8-13.14c.25-1.16-.44-1.61-1.23-1.27L2.17 8.47c-1.17.45-1.16 1.11-.2 1.39l4.02 1.25 9.32-5.87c.44-.27.85-.12.52.17l-7.55 6.8-2.24 7.39z"/></svg>
+        </div>
+        <div class="escena-titulo">CANAL DE VIDEOS</div>
+        <span class="chip" [class.chip-draft]="panel.estado === 'borrador'" [class.chip-live]="panel.estado === 'publicado'">
+          {{panel.estado === 'publicado' ? 'PUBLICADO' : 'BORRADOR'}}
+        </span>
+      </div>
+
+      <div class="bollo rise-in">
+        <div class="bollo-media" *ngIf="poster(panel)" [style.backgroundImage]="'url(' + poster(panel) + ')'"></div>
+        <div class="bollo-media bollo-media-mono" *ngIf="!poster(panel)">
+          <span>{{nombreTitulo(nombre(panel))}}</span>
+        </div>
+        <div class="bollo-cab">
+          <div class="bollo-nombre">{{nombre(panel)}}</div>
+          <span class="tally">visto 0 · 14:32</span>
+        </div>
+        <div class="bollo-caption" [class.vacio-caption]="!captionPanel(panel)">
+          {{captionPanel(panel) || '…'}}
+        </div>
+      </div>
+
+      <div class="escena-pie">
+        <button class="boton-accion" (click)="abrir(panel)">ABRIR EN EL GESTOR</button>
+        <span class="tally">Siguiente en la cola de publicación</span>
+      </div>
+    </ng-container>
+
+    <ng-container *ngIf="!cargando && !errorBackend && !panel">
+      <div class="escena-titulo tally">El canal espera su primer estreno</div>
+      <p class="escena-txt dimmed">Guarda una película o serie desde la barra de búsqueda y aquí vas a ver una previa idéntica a lo que se publicará.</p>
+    </ng-container>
+  </section>
+</div>

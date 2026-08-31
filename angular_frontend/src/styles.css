@@ -1,0 +1,143 @@
+:root {
+  /* PIEL DE TELEGRAM — tokens del mundo */
+  --bg-page: #0e1621;
+  --bg-chat: #17212b;
+  --bg-elevated: #242f3d;
+  --bg-elevated-2: #1c2632;
+  --bg-input: rgba(84, 110, 122, 0.15);
+  --bg-active: rgba(85, 170, 255, 0.15);
+  --bg-hover: rgba(255, 255, 255, 0.04);
+  --hairline: rgba(255, 255, 255, 0.08);
+  --hairline-soft: rgba(255, 255, 255, 0.05);
+  --text-primary: #f5f5f5;
+  --text-dimmed: rgba(245, 245, 245, 0.66);
+  --text-faint: rgba(245, 245, 245, 0.55);
+  --text-inverse: #0e1621;
+  --action: #2ea6ff;
+  --action-hover: #69b8f3;
+  --action-dim: rgba(46, 166, 255, 0.16);
+  --link: #2ea6ff;
+  --danger: #ff6b6b;
+  --danger-dim: rgba(255, 107, 107, 0.14);
+  --ok: #46d28e;
+  --star: #f5c15d;
+  --mono: ui-monospace, "Cascadia Mono", "Segoe UI Mono", Consolas, monospace;
+  --sans: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --rad-bubble: 12px;
+  --rad-chip: 8px;
+  --rad-btn: 7px;
+  --rad-input: 10px;
+}
+
+* { box-sizing: border-box; }
+
+html, body { height: 100%; }
+
+body {
+  margin: 0;
+  font-family: var(--sans);
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--text-primary);
+  background: var(--bg-page);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* superficies del navegador */
+::selection { background: rgba(46, 166, 255, 0.28); color: #fff; }
+:focus { outline: none; }
+:focus-visible { outline: 2px solid var(--action); outline-offset: 2px; border-radius: 3px; }
+input, textarea, button, select { font: inherit; color: inherit; }
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.14); border-radius: 8px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.22); }
+* { scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.16) transparent; }
+
+::placeholder { color: var(--text-faint); }
+.caret-blue, .caret-blue:focus { caret-color: var(--action); }
+
+a { color: var(--link); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* material mínimo — snackbar y progreso */
+.mat-snack-bar-container {
+  background: var(--bg-elevated) !important;
+  color: var(--text-primary) !important;
+  border: 1px solid var(--hairline) !important;
+  border-radius: var(--rad-chip) !important;
+  font-family: var(--sans) !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35) !important;
+}
+.mat-snack-bar-container .mat-button-wrapper { color: var(--action); }
+.mat-progress-bar { border-radius: 1px; }
+.mat-progress-bar-buffer { background-color: rgba(46, 166, 255, 0.22); }
+.mat-progress-bar-fill::after { background-color: var(--action); }
+
+/* utilidades del mundo */
+.mono { font-family: var(--mono); font-size: 0.92em; letter-spacing: 0.02em; }
+.dimmed { color: var(--text-dimmed); }
+.faint { color: var(--text-faint); }
+.tally { font-family: var(--mono); color: var(--text-dimmed); font-size: 0.85em; letter-spacing: 0.04em; }
+
+/* hairline chips — el color solo vive en el filo */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--hairline);
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--text-dimmed);
+  white-space: nowrap;
+}
+.chip-format { border-color: rgba(78, 190, 255, 0.4); color: rgba(140, 210, 255, 0.9); }
+.chip-draft { border-color: var(--action); color: var(--action); }
+.chip-live { border-color: var(--ok); color: var(--ok); }
+.chip-error { border-color: var(--danger); color: var(--danger); }
+
+/* skeleton */
+.sk {
+  position: relative;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 4px;
+}
+.sk::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.08), transparent);
+  transform: translateX(-100%);
+  animation: sk-drift 1.4s infinite;
+}
+@keyframes sk-drift { to { transform: translateX(100%); } }
+
+/* entrada al chat: los mensajes suben con fade una vez */
+@keyframes rise-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.rise-in { animation: rise-in 220ms cubic-bezier(0.2, 0, 0, 1); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+button {
+  border: none;
+  background: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+button:disabled { cursor: not-allowed; }
+
+img { display: block; }

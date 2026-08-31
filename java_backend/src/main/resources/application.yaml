@@ -1,0 +1,78 @@
+server:
+  port: 9000
+  error:
+    # Expone el mensaje de las excepciones (ej. sello de la HC) en el body JSON.
+    include-message: always
+
+
+spring:
+  application:
+    name: crowie.dev
+  # Perfil por defecto: 'local' tiene las credenciales reales (DB y secretos)
+  # en application-local.yaml (gitignored). Así el arranque y los tests
+  # cargan la configuración local sin necesidad de flags externos.
+  profiles:
+    default: local
+
+  jackson:
+    deserialization:
+      # Permite que campos primitivos ausentes/null (ej. boolean de la HC) se
+      # mapeen a su default en lugar de rechazar el payload con 400.
+      fail-on-null-for-primitives: false
+
+  datasource:
+    # Base de datos canónica: la crea database/schema.sql (ejecutar una vez con
+    # `mysql -u root -p < database/schema.sql` desde la raíz del proyecto).
+    url: jdbc:mariadb://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:canal_videos_telegram}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    driver-class-name: org.mariadb.jdbc.Driver
+
+  jpa:
+    # El DDL lo posee database/schema.sql (ENUM, JSON, columna generada y
+    # semillas). Hibernate NO crea ni altera tablas: 'none'.
+    hibernate:
+      ddl-auto: none
+    # Esto imprimirá las consultas SQL en la consola, vital para debuggear el Nivel Senior
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MariaDBDialect
+        format_sql: true
+
+  # Configuración para integración con Ollama local (Spring AI)
+  ai:
+    ollama:
+      base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
+      chat:
+        options:
+          model: ${OLLAMA_MODEL:qwen2.5-coder:7b}
+
+# ============================================================
+# SECRETOS / INTEGRACIONES — los valores REALES van en
+# application-local.yaml (gitignored). Aquí solo placeholders.
+# Para arrancar sin el perfil 'local', define las variables de
+# entorno correspondientes (ej. TMDB_API_KEY, TELEGRAM_BOT_TOKEN).
+# ============================================================
+app:
+  tmdb:
+    # API Key de https://www.themoviedb.org/settings/api (gratis)
+    api-key: ${TMDB_API_KEY:}
+    # Idioma canónico del proyecto: español latino
+    language: es-MX
+    # URLs de imágenes de TMDB (sin cambios)
+    image-base-url: https://image.tmdb.org/t/p
+    poster-size: w780
+    # Carpeta local donde se descargan los pósters (caché de imágenes)
+    poster-local-dir: storage/posters
+    # Días sin volver a consultar la API para un mismo título (caché de datos)
+    cache-ttl-days: 7
+    # Regiones LATAM para disponibilidad en streaming (watch/providers)
+    provider-regions: [AR, MX, CL, CO, PE]
+  telegram:
+    # Token del bot creado en @BotFather
+    bot-token: ${TELEGRAM_BOT_TOKEN:}
+    # Canal a publicar (ej. "@canal_videos_test" o id numérico)
+    channel-id: ${TELEGRAM_CHANNEL_ID:}
+    # Grupo de discusión vinculado al canal (ej. "-1001234567890")
+    discussion-group-id: ${TELEGRAM_DISCUSSION_GROUP_ID:}
