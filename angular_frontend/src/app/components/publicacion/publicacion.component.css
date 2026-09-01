@@ -313,6 +313,38 @@
 }
 .caption:focus { border-color: rgba(46, 166, 255, 0.55); }
 
+/* contador de caracteres */
+.contador-capsula {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 6px auto 0;
+  padding: 6px 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  width: min(640px, 100%);
+  font-size: 0.78em;
+  color: var(--text-dimmed);
+}
+.contador-capsula.excede {
+  border-color: var(--danger);
+  background: var(--danger-dim);
+  color: var(--danger);
+}
+.contador-num { font-weight: 700; font-variant-numeric: tabular-nums; }
+.contador-num.peligro { color: var(--danger); }
+.contador-detalle { color: var(--text-faint); font-size: 0.9em; }
+.contador-alerta {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: 4px;
+  color: var(--danger);
+  font-weight: 600;
+  font-size: 0.85em;
+}
+
 .botones {
   flex: none;
   width: min(640px, 100%);
@@ -357,9 +389,9 @@
   min-width: 110px;
   font-family: var(--mono);
   font-size: 0.82em;
-  color: var(--text-faint);
+  color: var(--text-primary);
   border-style: dashed;
-  opacity: 0.75;
+  opacity: 0.85;
 }
 .field-terabox:focus { opacity: 1; }
 .field-terabox::placeholder { color: var(--text-faint); font-style: italic; }
@@ -556,6 +588,29 @@
   margin-top: -4px;
 }
 .placeholders .tally { color: var(--text-faint); font-size: 0.8em; }
+.placeholders .chip {
+  cursor: pointer;
+  transition: background 120ms, color 120ms, transform 80ms;
+}
+.placeholders .chip:hover { background: var(--bg-hover); transform: scale(1.03); }
+.placeholders .chip.mono { font-family: var(--mono); }
+
+/* validación de placeholders */
+.placeholder-validacion {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 8px 10px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--hairline);
+  border-radius: var(--rad-input);
+  font-size: 0.78em;
+}
+.placeholder-validacion .tally { color: var(--text-faint); }
+.placeholder-validacion .chip-ok { background: rgba(46, 204, 113, 0.15); color: #2ecc71; }
+.placeholder-validacion .chip-bad { background: rgba(231, 76, 60, 0.15); color: #e74c3c; }
 
 .modal-pie {
   display: flex;

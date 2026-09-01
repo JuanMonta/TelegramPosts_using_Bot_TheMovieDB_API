@@ -37,6 +37,14 @@ interface Plataforma {
 
 const REGIONES = ['MX', 'AR', 'CL', 'CO', 'PE'];
 
+const BANDERAS: Record<string, string> = {
+  MX: '🇲🇽',
+  AR: '🇦🇷',
+  CL: '🇨🇱',
+  CO: '🇨🇴',
+  PE: '🇵🇪'
+};
+
 @Component({
   selector: 'app-publicacion',
   templateUrl: './publicacion.component.html',
@@ -75,8 +83,20 @@ export class PublicacionComponent implements OnInit, OnDestroy {
   nuevaPlantillaTexto = '';
   guardandoPlantilla = false;
 
+  // contador de caracteres (límite Telegram photo caption = 1024)
+  readonly LIMITE_TELEGRAM = 1024;
+  contadorCaption = { total: 0, caption: 0, links: 0, excede: false };
+
   estrenos: Estreno[] = [];
   plataformas: Plataforma[] = [];
+
+  bandera(region: string): string {
+    return BANDERAS[region] ?? '';
+  }
+
+  // validación de placeholders en tiempo real
+  validacionNueva = { valid: [] as string[], invalid: [] as string[] };
+  validacionEditar = { valid: [] as string[], invalid: [] as string[] };
 
   private killed = new Subject<void>();
   private temporizadorCaption: number | undefined;
@@ -289,9 +309,14 @@ export class PublicacionComponent implements OnInit, OnDestroy {
 
   private proveedoresTexto(t: TituloDetalle): string | null {
     const plataformas = this.parsePlataformas(t);
-    const mejores = plataformas.find((p) => p.region === 'MX') ?? plataformas[0];
-    if (!mejores || !mejores.proveedores.length) return null;
-    return mejores.proveedores.slice(0, 4).join(', ');
+    if (!plataformas.length) return null;
+    return plataformas
+      .map(p => {
+        const flag = BANDERAS[p.region] ?? '';
+        const provs = p.proveedores.slice(0, 3).join(', ');
+        return `${flag} ${p.region}: ${provs}`;
+      })
+      .join('  |  ');
   }
 
   // ---- diálogo de plantilla ----
@@ -314,6 +339,59 @@ export class PublicacionComponent implements OnInit, OnDestroy {
 
   cancelarEdicion(): void {
     this.plantillaEditando = null;
+  }
+
+  /** Inserta un placeholder en el textarea indicado ('nueva' o 'editar') */
+  insertarPlaceholder(destino: 'nueva' | 'editar', name: string): void {
+    const token = '{' + name + '}';
+    const textarea = destino === 'nueva'
+      ? (document.querySelector('.plantilla-nueva-text') as HTMLTextAreaElement)
+      : (document.querySelector('.plantilla-editor') as HTMLTextAreaElement);
+    if (!textarea) return;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const value = textarea.value;
+    textarea.value = value.slice(0, start) + token + value.slice(end);
+    textarea.selectionStart = textarea.selectionEnd = start + token.length;
+    textarea.focus();
+    textarea.dispatchEvent(new Event('input'));
+  }
+
+  insertarPlaceholderEnEdicion(name: string): void {
+    this.insertarPlaceholder('editar', name);
+    this.actualizarValidacionEditar();
+  }
+
+  actualizarValidacionNueva(): void {
+    this.validacionNueva = this.validarPlaceholders(this.nuevaPlantillaTexto);
+  }
+
+  actualizarValidacionEditar(): void {
+    this.validacionEditar = this.validarPlaceholders(this.plantillaEditando?.template ?? '');
+  }
+
+  /** Detecta placeholders válidos e inválidos en un texto */
+  private validarPlaceholders(texto: string): { valid: string[]; invalid: string[] } {
+    const validSet = new Set(['{title}', '{year}', '{rating}', '{votes}', '{genres}', '{synopsis}', '{providers}']);
+    const found = new Set<string>();
+    const invalid = new Set<string>();
+
+    for (let i = 0; i < texto.length; ) {
+      if (texto[i] === '{') {
+        const end = texto.indexOf('}', i);
+        if (end !== -1) {
+          const token = texto.slice(i, end + 1);
+          if (validSet.has(token)) found.add(token);
+          else invalid.add(token);
+          i = end + 1;
+        } else {
+          i++;
+        }
+      } else {
+        i++;
+      }
+    }
+    return { valid: Array.from(found), invalid: Array.from(invalid) };
   }
 
   guardarEdicionPlantilla(): void {
@@ -457,8 +535,25 @@ export class PublicacionComponent implements OnInit, OnDestroy {
 
   onCaptionInput(): void {
     this.estadoGuardado = 'salvando';
+    this.actualizarContador();
     if (this.temporizadorCaption !== undefined) window.clearTimeout(this.temporizadorCaption);
     this.temporizadorCaption = window.setTimeout(() => this.salvarCaption(), 700);
+  }
+
+  private contarGraphemes(s: string): number {
+    return s ? [...s].length : 0;
+  }
+
+  actualizarContador(): void {
+    const captionLen = this.contarGraphemes(this.caption);
+    const linksLen = this.links.reduce((acc, l) => acc + this.contarGraphemes(l.texto) + this.contarGraphemes(l.url) + 3, 0);
+    const total = captionLen + linksLen;
+    this.contadorCaption = {
+      total,
+      caption: captionLen,
+      links: linksLen,
+      excede: total > this.LIMITE_TELEGRAM
+    };
   }
 
   private salvarCaption(): void {
@@ -493,6 +588,7 @@ export class PublicacionComponent implements OnInit, OnDestroy {
             this.nuevoTexto = '';
             this.nuevaUrl = '';
             this.nuevaTerabox = '';
+            this.actualizarContador();
             this.salvarDespuesDeCrear();
           },
           error: (e: HttpErrorResponse) => this.snack.open(this.api.mensajeDeError(e), 'OK', { duration: 4000 })
@@ -535,6 +631,7 @@ export class PublicacionComponent implements OnInit, OnDestroy {
     this.titulosService.eliminarLink(this.titulo.id, f.id).pipe(takeUntil(this.killed)).subscribe({
       next: () => {
         this.links.splice(this.links.indexOf(f), 1);
+        this.actualizarContador();
         this.salvarDespuesDeCrear();
         this.snack.open('Botón eliminado', 'OK', { duration: 2000 });
       },

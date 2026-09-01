@@ -99,7 +99,7 @@
           <div *ngIf="plataformas.length" class="ficha-dato">
             <span class="tally etiqueta">DISPONIBLE EN</span>
             <div class="estrenos">
-              <span *ngFor="let p of plataformas" class="chip chip-format">{{p.region}}: {{p.proveedores.slice(0, 3).join(', ')}}</span>
+              <span *ngFor="let p of plataformas" class="chip chip-format">{{bandera(p.region)}} {{p.region}}: {{p.proveedores.slice(0, 3).join(', ')}}</span>
             </div>
           </div>
         </div>
@@ -157,6 +157,16 @@
       (ngModelChange)="onCaptionInput()"
       placeholder="Escribí el texto del post…"
     ></textarea>
+
+    <!-- contador de caracteres (límite Telegram = 1024) -->
+    <div class="contador-capsula" [class.excede]="contadorCaption.excede">
+      <span class="contador-num" [class.peligro]="contadorCaption.excede">{{contadorCaption.total}} / {{LIMITE_TELEGRAM}}</span>
+      <span class="contador-detalle">caption: {{contadorCaption.caption}} · links: {{contadorCaption.links}}</span>
+      <span class="contador-alerta" *ngIf="contadorCaption.excede">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        Excede el límite de Telegram (photo caption ≤ 1024)
+      </span>
+    </div>
 
     <div class="botones">
       <div class="compositor-tit">
@@ -265,7 +275,16 @@
         <!-- crear nueva -->
         <div class="plantilla-nueva">
           <input class="campo" [(ngModel)]="nuevaPlantillaNombre" placeholder="Nombre de la plantilla" (keyup.enter)="crearPlantilla()" />
-          <textarea class="campo plantilla-nueva-text" [(ngModel)]="nuevaPlantillaTexto" placeholder="Plantilla (usá {title}, {year}, {rating}, {votes}, {genres}, {synopsis}, {providers})" rows="4" spellcheck="false"></textarea>
+          <textarea class="campo plantilla-nueva-text" [(ngModel)]="nuevaPlantillaTexto" (input)="actualizarValidacionNueva()" placeholder="Plantilla (usá {title}, {year}, {rating}, {votes}, {genres}, {synopsis}, {providers})" rows="4" spellcheck="false"></textarea>
+          <div class="placeholders">
+            <span class="tally">Placeholders:</span>
+            <span class="chip mono" *ngFor="let p of ['title','year','rating','votes','genres','synopsis','providers']" (click)="insertarPlaceholder('nueva', p)" title="Click para insertar en cursor">{{placeholder(p)}}</span>
+          </div>
+          <div class="placeholder-validacion" *ngIf="validacionNueva.invalid.length > 0 || validacionNueva.valid.length > 0">
+            <span class="tally">Validación:</span>
+            <span class="chip chip-ok" *ngFor="let v of validacionNueva.valid">{{v}}</span>
+            <span class="chip chip-bad" *ngFor="let v of validacionNueva.invalid">{{v}} <span class="tally">(no existe)</span></span>
+          </div>
           <button class="mini-btn accente" (click)="crearPlantilla()" [disabled]="!nuevaPlantillaNombre.trim() || !nuevaPlantillaTexto.trim() || guardandoPlantilla">
             <span *ngIf="!guardandoPlantilla">CREAR PLANTILLA</span>
             <span class="spinner spinner-chico" *ngIf="guardandoPlantilla"></span>
@@ -276,10 +295,15 @@
       <!-- editar -->
       <div class="plantilla-editar" *ngIf="plantillaEditando">
         <input class="campo" [(ngModel)]="plantillaEditando.name" placeholder="Nombre" />
-        <textarea class="campo plantilla-editor" [(ngModel)]="plantillaEditando.template" rows="12" spellcheck="false"></textarea>
+        <textarea class="campo plantilla-editor" [(ngModel)]="plantillaEditando.template" (input)="actualizarValidacionEditar()" rows="12" spellcheck="false"></textarea>
         <div class="placeholders">
           <span class="tally">Placeholders:</span>
-          <span class="chip mono" *ngFor="let p of ['title','year','rating','votes','genres','synopsis','providers']">{{placeholder(p)}}</span>
+          <span class="chip mono" *ngFor="let p of ['title','year','rating','votes','genres','synopsis','providers']" (click)="insertarPlaceholderEnEdicion(p)" title="Click para insertar en cursor">{{placeholder(p)}}</span>
+        </div>
+        <div class="placeholder-validacion" *ngIf="validacionEditar.invalid.length > 0 || validacionEditar.valid.length > 0">
+          <span class="tally">Validación:</span>
+          <span class="chip chip-ok" *ngFor="let v of validacionEditar.valid">{{v}}</span>
+          <span class="chip chip-bad" *ngFor="let v of validacionEditar.invalid">{{v}} <span class="tally">(no existe)</span></span>
         </div>
         <label class="tally"><input type="checkbox" [(ngModel)]="plantillaEditando.isDefault" /> Por defecto</label>
         <div class="modal-pie">

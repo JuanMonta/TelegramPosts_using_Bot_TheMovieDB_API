@@ -7,6 +7,7 @@ import api.crow.repository.TituloRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -57,7 +58,7 @@ public class TituloController {
 
     // ---- Links / botones del post ----
 
-    record LinkRequest(String texto, String url, String teraboxFilename, Integer orden) {}
+    record LinkRequest(String texto, String url, @JsonProperty("terabox_filename") String teraboxFilename, Integer orden) {}
 
     @PostMapping("/{id}/links")
     public ResponseEntity<?> agregarLink(@PathVariable Long id, @RequestBody LinkRequest req) {

@@ -32,6 +32,7 @@ angular_frontend/out-tsc/
 angular_frontend/bazel-out/
 angular_frontend/coverage/
 angular_frontend/.angular/
+angular_frontend/test-results
 
 # Logs 
 **/logs/
