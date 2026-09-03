@@ -10,7 +10,6 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
-import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigDecimal;
 import java.nio.file.Files;
@@ -209,8 +208,11 @@ public class TmdbService {
             Files.write(file, img);
             titulo.setPosterLocalPath(props.posterLocalDir() + "/" + titulo.getTmdbId() + ".jpg");
             tituloRepository.save(titulo);
-        } catch (IOException e) {
-            // Si falla la descarga, seguimos: el envío puede usar la URL de TMDB.
+        } catch (Exception e) {
+            // Nunca debe fallar la petición de guardado por la descarga del póster:
+            // el envío a Telegram usa la URL de TMDB directamente, así que esto es
+            // solo una caché opcional. Cualquier error del CDN (4xx/5xx, timeout,
+            // I/O) se ignora y se sigue con el flujo.
         }
     }
 
