@@ -6,12 +6,21 @@ import api.crow.domain.LinkVideo;
 import api.crow.domain.Publicacion;
 import api.crow.domain.Titulo;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.io.Resource;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClient;
 import tools.jackson.databind.JsonNode;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -20,29 +29,45 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class TelegramPublisher {
 
+    private static final Duration CONEXION_TIMEOUT = Duration.ofSeconds(10);
+    private static final Duration LECTURA_TIMEOUT = Duration.ofSeconds(45);
+
     private final TelegramProperties telegram;
     private final TmdbProperties tmdb;
+
     private final RestClient restClient = RestClient.builder()
             .baseUrl("https://api.telegram.org")
+            .requestFactory(fabricaConTimeouts())
             .build();
+
+    private final RestClient posterClient = RestClient.builder()
+            .requestFactory(fabricaConTimeouts())
+            .build();
+
+    private static SimpleClientHttpRequestFactory fabricaConTimeouts() {
+        SimpleClientHttpRequestFactory f = new SimpleClientHttpRequestFactory();
+        f.setConnectTimeout(CONEXION_TIMEOUT);
+        f.setReadTimeout(LECTURA_TIMEOUT);
+        return f;
+    }
 
     /**
      * Publica el póster + caption + botones de enlaces en el canal.
+     * El póster se sube como ARCHIVO (multipart), no como URL: Telegram no tiene
+     * que ir a descargarlo del CDN de TMDB, lo que eliminaba cuelgues de 20s+
+     * cuando el CDN iba lento (y el consiguiente error de conexión en el frontend).
      * Devuelve el message_id de Telegram y el chat donde se publicó.
      */
     public Map<String, Object> sendPhoto(Publicacion publicacion, List<LinkVideo> links) {
-        String photo = posterUrl(publicacion.getTitulo());
-        if (photo == null) {
-            throw new IllegalStateException("El título no tiene póster. Cárgalo primero desde TMDB.");
-        }
+        Resource foto = posterImagen(publicacion.getTitulo());
 
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put("chat_id", telegram.channelId());
-        body.put("photo", photo);
-        body.put("caption", captionConLinks(publicacion, links));
-        body.put("parse_mode", "HTML");
+        MultiValueMap<String, Object> form = new LinkedMultiValueMap<>();
+        form.add("chat_id", telegram.channelId());
+        form.add("photo", foto);
+        form.add("caption", captionConLinks(publicacion, links));
+        form.add("parse_mode", "HTML");
 
-        JsonNode resp = llamar("sendPhoto", body);
+        JsonNode resp = llamar("sendPhoto", form, MediaType.MULTIPART_FORM_DATA);
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("message_id", resp.path("message_id").asLong());
         out.put("chat_id", resp.path("chat").path("id").asLong());
@@ -69,7 +94,7 @@ public class TelegramPublisher {
         body.put("parse_mode", "HTML");
 
         try {
-            llamar("editMessageCaption", body);
+            llamar("editMessageCaption", body, MediaType.APPLICATION_JSON);
         } catch (IllegalStateException e) {
             if (e.getMessage() != null && e.getMessage().contains("message is not modified")) {
                 return; // el post ya tenía exactamente este contenido: no-op exitoso
@@ -90,12 +115,67 @@ public class TelegramPublisher {
             del.put("chat_id", publicacion.getTelegramChatId());
             del.put("message_id", publicacion.getTelegramMessageId());
             try {
-                llamar("deleteMessage", del);
+                llamar("deleteMessage", del, MediaType.APPLICATION_JSON);
             } catch (Exception ignore) {
                 // el mensaje ya no existía (borrado manual o el bot perdió acceso): se sigue con el nuevo
             }
         }
         return sendPhoto(publicacion, links);
+    }
+
+    // ---- póster como archivo ----
+
+    /** Foto para subir a Telegram: el archivo local cachead si existe; si no, lo descarga de TMDB. */
+    private Resource posterImagen(Titulo t) {
+        if (t == null || t.getPosterPath() == null || t.getPosterPath().isBlank()) {
+            throw new IllegalStateException("El título no tiene póster. Cárgalo primero desde TMDB.");
+        }
+        Resource local = posterLocal(t);
+        if (local != null) return local;
+        return descargarYCachear(t);
+    }
+
+    private Resource posterLocal(Titulo t) {
+        if (t.getPosterLocalPath() == null || t.getPosterLocalPath().isBlank()) return null;
+        try {
+            Path p = Path.of(t.getPosterLocalPath()).toAbsolutePath().normalize();
+            if (Files.exists(p) && Files.isRegularFile(p)) return new FileSystemResource(p);
+        } catch (Exception ignore) {
+            // no hay caché local: se descarga desde TMDB
+        }
+        return null;
+    }
+
+    private Resource descargarYCachear(Titulo t) {
+        try {
+            String url = tmdb.imageBaseUrl() + "/" + tmdb.posterSize() + t.getPosterPath();
+            byte[] img = posterClient.get().uri(url).retrieve().body(byte[].class);
+            if (img == null || img.length == 0) {
+                throw new IllegalStateException("Póster vacío para tmdbId=" + t.getTmdbId());
+            }
+            cachearLocal(t, img);
+            return new ByteArrayResource(img) {
+                @Override
+                public String getFilename() {
+                    return t.getTmdbId() + ".jpg";
+                }
+            };
+        } catch (IllegalStateException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IllegalStateException("No se pudo descargar el póster desde TMDB: " + e.getMessage());
+        }
+    }
+
+    /** Guarda el póster en disco para no volver a descargarlo. Caché opcional: falla silencioso. */
+    private void cachearLocal(Titulo t, byte[] img) {
+        try {
+            Path dir = Path.of(tmdb.posterLocalDir()).toAbsolutePath().normalize();
+            Files.createDirectories(dir);
+            Files.write(dir.resolve(t.getTmdbId() + ".jpg"), img);
+        } catch (Exception ignore) {
+            // caché opcional: si falla, la próxima vez se descarga de nuevo
+        }
     }
 
     /**
@@ -129,7 +209,8 @@ public class TelegramPublisher {
 
     private final tools.jackson.databind.ObjectMapper jackson = new tools.jackson.databind.ObjectMapper();
 
-    private JsonNode llamar(String metodo, Map<String, Object> body) {
+    /** Llama a la Bot API con el body indicado (JSON o multipart según content-type). */
+    private JsonNode llamar(String metodo, Object body, MediaType contentType) {
         if (telegram.botToken() == null || telegram.botToken().isBlank())
             throw new IllegalStateException("TELEGRAM_BOT_TOKEN no configurado. Pégalo en application-local.yaml en app.telegram.bot-token");
         if (telegram.channelId() == null || telegram.channelId().isBlank())
@@ -137,7 +218,7 @@ public class TelegramPublisher {
         try {
             String respBody = restClient.post()
                     .uri("/bot" + telegram.botToken() + "/" + metodo)
-                    .contentType(MediaType.APPLICATION_JSON)
+                    .contentType(contentType)
                     .body(body)
                     .retrieve()
                     .onStatus(HttpStatusCode::isError, (request, response) -> {
@@ -170,10 +251,5 @@ public class TelegramPublisher {
         } catch (Exception e) {
             return texto;
         }
-    }
-
-    private String posterUrl(Titulo t) {
-        if (t == null || t.getPosterPath() == null) return null;
-        return tmdb.imageBaseUrl() + "/" + tmdb.posterSize() + t.getPosterPath();
     }
 }
