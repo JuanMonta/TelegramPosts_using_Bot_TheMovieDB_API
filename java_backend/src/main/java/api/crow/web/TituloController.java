@@ -4,6 +4,7 @@ import api.crow.domain.LinkVideo;
 import api.crow.domain.Titulo;
 import api.crow.repository.LinkVideoRepository;
 import api.crow.repository.TituloRepository;
+import api.crow.service.TmdbService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -25,6 +26,7 @@ public class TituloController {
     private final TituloRepository tituloRepository;
     private final LinkVideoRepository linkVideoRepository;
     private final ObjectMapper objectMapper;
+    private final TmdbService tmdbService;
 
     @GetMapping
     public List<Map<String, Object>> listar() {
@@ -49,11 +51,13 @@ public class TituloController {
 
     @DeleteMapping("/{id}")
     public ResponseEntity<?> eliminar(@PathVariable Long id) {
-        if (!tituloRepository.existsById(id)) {
-            return ResponseEntity.notFound().build();
-        }
-        tituloRepository.deleteById(id);
-        return ResponseEntity.noContent().build();
+        return tituloRepository.findById(id)
+                .map(t -> {
+                    tituloRepository.deleteById(id);
+                    tmdbService.borrarPoster(t);
+                    return ResponseEntity.noContent().build();
+                })
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     // ---- Links / botones del post ----

@@ -65,10 +65,41 @@ export interface Publicacion {
     telegram_grupo_message_id?: number | null;
     telegram_grupo_chat_id?: string | null;
     chat_dedicado?: boolean;
+    comentarios_count?: number;
     fecha_publicacion: string | null;
     fecha_editado?: string | null;
     fecha_republicado?: string | null;
   }
+
+/** Fila ligera del catálogo (GET /api/publicaciones/catalogo): sin datos pesados. */
+export interface CatalogoFila {
+  id: number;
+  publicacion_id: number | null;
+  titulo: string;
+  tipo: 'movie' | 'tv';
+  anio: number | null;
+  generos: string | null;
+  rating: number | null;
+  poster_path: string | null;
+  estado: 'borrador' | 'publicado' | 'sin';
+  fecha: string | null;
+  comentarios_count: number;
+}
+
+export interface Comentario {
+  id: number;
+  autor: string;
+  texto: string;
+  fecha: string;
+}
+
+export interface CatalogoRespuesta {
+  total: number;
+  borradores: number;
+  publicados: number;
+  sin: number;
+  items: CatalogoFila[];
+}
 
 export function nombreMostrable(t: { titulo_latino: string | null; titulo_original: string }): string {
   return t.titulo_latino && t.titulo_latino.trim().length ? t.titulo_latino.trim() : t.titulo_original;

@@ -2,6 +2,7 @@ package api.crow.web;
 
 import api.crow.domain.LinkVideo;
 import api.crow.domain.Publicacion;
+import api.crow.repository.ComentarioRepository;
 import api.crow.repository.LinkVideoRepository;
 import api.crow.repository.PublicacionRepository;
 import api.crow.repository.TituloRepository;
@@ -13,6 +14,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -25,6 +27,7 @@ public class PublicacionController {
     private final PublicacionRepository publicacionRepository;
     private final TituloRepository tituloRepository;
     private final LinkVideoRepository linkVideoRepository;
+    private final ComentarioRepository comentarioRepository;
     private final TelegramPublisher telegram;
     private final TelegramProperties telegramProps;
 
@@ -37,6 +40,74 @@ public class PublicacionController {
             out.add(toMap(p));
         }
         return out;
+    }
+
+    /**
+     * Catálogo completo para el gestor: títulos + estado de publicación, con una
+     * proyección ligera (sin datos_json/sinopsis) y conteos por estado.
+     * El filtrado por texto/estado y el orden se hacen en el frontend para no
+     * recargar por cada interacción.
+     */
+    @GetMapping("/catalogo")
+    public ResponseEntity<?> catalogo() {
+        Map<Long, Publicacion> pubPorTitulo = new HashMap<>();
+        for (Publicacion p : publicacionRepository.findAllConTitulo()) {
+            pubPorTitulo.put(p.getTitulo().getId(), p);
+        }
+
+        // Precarga de conteos de comentarios
+        List<Long> pubIds = pubPorTitulo.values().stream()
+                .map(Publicacion::getId)
+                .toList();
+        Map<Long, Long> conteoComentarios = pubIds.isEmpty()
+                ? Map.of()
+                : comentarioRepository.conteoPorPublicaciones(pubIds);
+
+        int borradores = 0;
+        int publicados = 0;
+        int sin = 0;
+        List<Map<String, Object>> items = new ArrayList<>();
+        for (TituloRepository.CatalogoFila t : tituloRepository.catalogo()) {
+            Publicacion p = pubPorTitulo.get(t.getId());
+            String estado = p == null ? "sin" : p.getEstado();
+            if ("publicado".equals(estado)) publicados++;
+            else if ("sin".equals(estado)) sin++;
+            else borradores++;
+
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("id", t.getId());
+            m.put("publicacion_id", p == null ? null : p.getId());
+            m.put("titulo", nombreMostrable(t));
+            m.put("tipo", t.getTipo());
+            m.put("anio", t.getAnio());
+            m.put("generos", t.getGeneros());
+            m.put("rating", t.getRating());
+            m.put("poster_path", t.getPosterPath());
+            m.put("estado", estado);
+            m.put("fecha", fechaMostrable(p, t));
+            m.put("comentarios_count", p == null ? 0 : conteoComentarios.getOrDefault(p.getId(), 0L));
+            items.add(m);
+        }
+
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("total", items.size());
+        out.put("borradores", borradores);
+        out.put("publicados", publicados);
+        out.put("sin", sin);
+        out.put("items", items);
+        return ResponseEntity.ok(out);
+    }
+
+    private String nombreMostrable(TituloRepository.CatalogoFila t) {
+        String latino = t.getTituloLatino();
+        return latino != null && !latino.isBlank() ? latino : t.getTituloOriginal();
+    }
+
+    private String fechaMostrable(Publicacion p, TituloRepository.CatalogoFila t) {
+        LocalDateTime f = p != null
+                ? (p.getFechaPublicacion() != null ? p.getFechaPublicacion() : p.getCreadoEn())
+                : t.getCreadoEn();
+        return f == null ? null : f.toString();
     }
 
     @GetMapping("/{id}")
@@ -166,6 +237,7 @@ public class PublicacionController {
         m.put("telegram_chat_id", p.getTelegramChatId());
         m.put("chat_dedicado", Boolean.TRUE);
         m.put("telegram_grupo_chat_id", telegramProps.discussionGroupId());
+        m.put("comentarios_count", comentarioRepository.countByPublicacionId(p.getId()));
         m.put("fecha_publicacion", p.getFechaPublicacion() == null ? null : p.getFechaPublicacion().toString());
         m.put("fecha_editado", p.getFechaEditado() == null ? null : p.getFechaEditado().toString());
         m.put("fecha_republicado", p.getFechaRepublicado() == null ? null : p.getFechaRepublicado().toString());

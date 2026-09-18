@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { ApiService } from './api.service';
-import { Publicacion } from '../models/modelos';
+import { CatalogoRespuesta, Comentario, Publicacion } from '../models/modelos';
 
 @Injectable({ providedIn: 'root' })
 export class PublicacionesService {
@@ -9,6 +9,11 @@ export class PublicacionesService {
 
   listar(): Observable<Publicacion[]> {
     return this.api.get<Publicacion[]>('/api/publicaciones');
+  }
+
+  /** Catálogo ligero para el gestor: filas de título + estado + conteos. */
+  catalogo(): Observable<CatalogoRespuesta> {
+    return this.api.get<CatalogoRespuesta>('/api/publicaciones/catalogo');
   }
 
   crear(tituloId: number, caption: string): Observable<Publicacion> {
@@ -29,5 +34,9 @@ export class PublicacionesService {
 
   republicar(id: number): Observable<Publicacion> {
     return this.api.post<Publicacion>(`/api/publicaciones/${id}/republicar`);
+  }
+
+  comentarios(publicacionId: number): Observable<Comentario[]> {
+    return this.api.get<Comentario[]>(`/api/publicaciones/${publicacionId}/comentarios`);
   }
 }

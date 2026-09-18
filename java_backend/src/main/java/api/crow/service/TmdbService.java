@@ -4,6 +4,7 @@ import api.crow.config.TmdbProperties;
 import api.crow.domain.Titulo;
 import api.crow.repository.TituloRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 import tools.jackson.databind.JsonNode;
@@ -23,6 +24,7 @@ import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class TmdbService {
 
     private final TmdbProperties props;
@@ -219,6 +221,26 @@ public class TmdbService {
     public String posterUrl(Integer tmdbId, String posterPath) {
         if (posterPath == null) return null;
         return props.imageBaseUrl() + props.posterSize() + posterPath;
+    }
+
+    /**
+     * Borra el póster local en disco del título (si existe).
+     * El path se construye a partir del directorio configurado + tmdbId (nunca del
+     * string guardado en BD), así el archivo siempre queda dentro de storage/posters
+     * y no hay riesgo de path traversal. No debe romper el flujo de eliminación del
+     * título: cualquier error se registra y se continúa.
+     */
+    public void borrarPoster(Titulo titulo) {
+        if (titulo == null || titulo.getTmdbId() == null) return;
+        try {
+            Path dir = Path.of(props.posterLocalDir()).toAbsolutePath().normalize();
+            Path file = dir.resolve(titulo.getTmdbId() + ".jpg").normalize();
+            if (Files.deleteIfExists(file)) {
+                log.info("Póster local eliminado: {}", file);
+            }
+        } catch (Exception e) {
+            log.warn("No se pudo borrar el póster local del tmdbId={}: {}", titulo.getTmdbId(), e.getMessage());
+        }
     }
 
     private void checkKey() {

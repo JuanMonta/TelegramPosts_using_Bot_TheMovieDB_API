@@ -1,5 +1,6 @@
 import { Component, OnDestroy, OnInit } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
+import { Location } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { Subject } from 'rxjs';
@@ -8,6 +9,7 @@ import { TitulosService } from '../../services/titulos.service';
 import { PublicacionesService } from '../../services/publicaciones.service';
 import { CaptionTemplateService, CaptionTemplate } from '../../services/caption-template.service';
 import { ApiService } from '../../services/api.service';
+import { NavegacionService } from '../../services/navegacion.service';
 import {
   LinkVideo,
   Publicacion,
@@ -104,11 +106,13 @@ export class PublicacionComponent implements OnInit, OnDestroy {
   constructor(
     private route: ActivatedRoute,
     private router: Router,
+    private location: Location,
     private titulosService: TitulosService,
     private publicacionesService: PublicacionesService,
     private captionTemplateService: CaptionTemplateService,
     private api: ApiService,
-    private snack: MatSnackBar
+    private snack: MatSnackBar,
+    private navegacion: NavegacionService
   ) {
     try {
       this.disposicion = localStorage.getItem('disposicion') === 'lado' ? 'lado' : 'pila';
@@ -761,12 +765,27 @@ export class PublicacionComponent implements OnInit, OnDestroy {
   eliminarTitulo(): void {
     if (!this.titulo) return;
     this.titulosService.eliminar(this.titulo.id).pipe(takeUntil(this.killed)).subscribe({
-      next: () => this.router.navigate(['/']),
+      next: () => this.irHome(),
       error: (e: HttpErrorResponse) => this.snack.open(this.api.mensajeDeError(e), 'OK', { duration: 4000 })
     });
   }
 
+  /**
+   * Regresa a la página principal sin apilar entradas '/': si el gestor fue
+   * abierto desde home, hace pop en el historial (location.back); si entró por
+   * URL directa, reemplaza la entrada actual para que la raíz sea única y no
+   * quede nada antes que ella.
+   */
+  private irHome(): void {
+    if (this.navegacion.vinoDeHome) {
+      this.navegacion.vinoDeHome = false;
+      this.location.back();
+    } else {
+      this.router.navigate(['/'], { replaceUrl: true });
+    }
+  }
+
   volver(): void {
-    this.router.navigate(['/']);
+    this.irHome();
   }
 }

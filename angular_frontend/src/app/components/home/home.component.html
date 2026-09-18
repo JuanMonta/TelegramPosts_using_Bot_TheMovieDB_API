@@ -1,4 +1,4 @@
-<div class="app">
+<div class="app" [class.con-panel-comentarios]="panelComentariosAbierto">
   <aside class="pane">
     <header class="pane-cab">
       <div class="avatar avatar-canal" aria-hidden="true">
@@ -6,7 +6,7 @@
       </div>
       <div class="pane-titulo">
         <h1>CANAL DE VIDEOS</h1>
-        <span class="tally">{{titulos.length}} guardados · {{borradores}} borrador<ng-container *ngIf="borradores !== 1">es</ng-container> · {{publicados}} publ<ng-container *ngIf="publicados !== 1">icados</ng-container><ng-container *ngIf="publicados === 1">icado</ng-container></span>
+        <span class="tally">{{total}} guardados · {{borradores}} borrador<ng-container *ngIf="borradores !== 1">es</ng-container> · {{publicados}} publ<ng-container *ngIf="publicados !== 1">icados</ng-container><ng-container *ngIf="publicados === 1">icado</ng-container></span>
       </div>
     </header>
 
@@ -25,7 +25,7 @@
       </button>
     </div>
 
-    <div class="pane-cuerpo">
+    <div class="pane-cuerpo" #paneCuerpo (scroll)="guardarScrollLista()">
       <mat-progress-bar *ngIf="cargando" mode="indeterminate" class="barra-carga"></mat-progress-bar>
 
       <div *ngIf="!cargando && errorBackend" class="aviso rise-in">
@@ -81,7 +81,7 @@
               </li>
             </ul>
             <div *ngIf="!resultados.length" class="vacio rise-in">
-              <div class="vacio-txt">Sin resultados para “{{busqueda}}”. Prueba otro término.</div>
+              <div class="vacio-txt">Sin resultados para "{{busqueda}}". Prueba otro término.</div>
               <div class="sugerir" *ngIf="sugerencia && !buscando">
                 <div class="sugerir-foto" *ngIf="sugerencia.poster_path" [style.backgroundImage]="'url(' + posterUrl(sugerencia.poster_path) + ')'"></div>
                 <div class="sugerir-txt">
@@ -96,26 +96,67 @@
         </ng-container>
       </ng-container>
 
-      <!-- lista de títulos guardados -->
+      <!-- catálogo de títulos guardados -->
       <ng-container *ngIf="!buscado">
-        <ul class="lista" *ngIf="titulos.length">
+        <div class="cat-bar rise-in">
+          <div class="pestanas" role="tablist">
+            <button class="pestana" [class.activa]="filtroEstado === 'todos'" (click)="cambiarEstado('todos')" role="tab">
+              Todos <span class="cnt">{{total}}</span>
+            </button>
+            <button class="pestana" [class.activa]="filtroEstado === 'borrador'" (click)="cambiarEstado('borrador')" role="tab">
+              <span class="punto-mini" aria-hidden="true"></span> Borradores <span class="cnt">{{borradores}}</span>
+            </button>
+            <button class="pestana" [class.activa]="filtroEstado === 'publicado'" (click)="cambiarEstado('publicado')" role="tab">
+              <svg class="checks-mini" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="4 12 9 17 20 6"/><polyline points="12 12 16 16 20 12"/></svg>
+              Publicados <span class="cnt">{{publicados}}</span>
+            </button>
+          </div>
+
+          <div class="cat-busqueda">
+            <svg class="busq-ico" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.2" y2="16.2"/></svg>
+            <input
+              class="busq-entrada caret-blue"
+              [(ngModel)]="busquedaCatalogo"
+              placeholder="Buscar en tu catálogo…"
+              (ngModelChange)="onChangeBusquedaCatalogo()"
+              autocomplete="off"
+            />
+            <button *ngIf="busquedaCatalogo" class="busq-limpiar" (click)="limpiarBusquedaCatalogo()" aria-label="Limpiar catálogo" title="Limpiar">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
+            </button>
+          </div>
+
+          <div class="cat-vista" role="group" aria-label="Cambiar vista">
+            <button class="btn-vista" [class.activa]="vista === 'lista'" (click)="cambiarVista('lista')" title="Ver como lista" aria-label="Ver como lista">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+            </button>
+            <button class="btn-vista" [class.activa]="vista === 'grid'" (click)="cambiarVista('grid')" title="Ver como cuadrícula" aria-label="Ver como cuadrícula">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- vista lista -->
+        <ul class="lista" *ngIf="vista === 'lista' && visibles.length">
           <li
-            *ngFor="let t of titulos"
+            *ngFor="let t of visibles"
             class="fila rise-in"
-            (click)="abrir(t)"
+            [class.fila-seleccionada]="panel?.id === t.id"
+            (click)="seleccionar(t)"
             tabindex="0"
-            (keyup.enter)="abrir(t)"
+            (keyup.enter)="seleccionar(t)"
           >
             <div class="foto" *ngIf="poster(t)" [style.backgroundImage]="'url(' + poster(t) + ')'"></div>
             <div class="foto foto-mono" *ngIf="!poster(t)">
-              <span>{{nombreTitulo(nombre(t))}}</span>
+              <span>{{nombreTitulo(t.titulo)}}</span>
             </div>
             <div class="fila-main">
-              <div class="fila-nombre">{{nombre(t)}}</div>
+              <div class="fila-nombre">{{t.titulo}}</div>
               <div class="fila-sub">
                 <span class="chip chip-format">{{tipo(t.tipo)}}</span>
                 <span *ngIf="t.anio" class="dimmed">{{t.anio}}</span>
                 <span *ngIf="t.rating" class="tally">★ {{t.rating.toFixed(1)}}</span>
+                <span *ngIf="t.comentarios_count" class="tally chip-comentarios">💬 {{t.comentarios_count}}</span>
                 <span *ngIf="t.generos" class="fila-sinopsis">{{t.generos}}</span>
               </div>
             </div>
@@ -128,7 +169,42 @@
           </li>
         </ul>
 
-        <div *ngIf="!cargando && !titulos.length" class="vacio rise-in">
+        <!-- vista cuadrícula -->
+        <div class="grid" *ngIf="vista === 'grid' && visibles.length">
+          <button
+            *ngFor="let t of visibles"
+            class="grid-card rise-in"
+            [class.grid-seleccionada]="panel?.id === t.id"
+            (click)="seleccionar(t)"
+            tabindex="0"
+          >
+            <div class="grid-foto" [class.grid-foto-mono]="!poster(t)" [style.backgroundImage]="poster(t) ? 'url(' + poster(t) + ')' : null">
+              <span *ngIf="!poster(t)" class="grid-inicial">{{nombreTitulo(t.titulo)}}</span>
+              <span class="grid-chip" [class.gc-borrador]="t.estado === 'borrador'" [class.gc-publicado]="t.estado === 'publicado'">
+                {{t.estado === 'publicado' ? 'PUBLICADO' : (t.estado === 'borrador' ? 'BORRADOR' : 'SIN POST')}}
+              </span>
+            </div>
+            <div class="grid-tex">
+              <div class="grid-nombre">{{t.titulo}}</div>
+              <div class="grid-sub">
+                <span>{{tipo(t.tipo)}}</span><span *ngIf="t.anio"> · {{t.anio}}</span><span *ngIf="t.rating"> · ★{{t.rating.toFixed(1)}}</span><span *ngIf="t.comentarios_count"> · 💬{{t.comentarios_count}}</span>
+              </div>
+            </div>
+          </button>
+        </div>
+
+        <!-- cargar más -->
+        <div *ngIf="hayMas" class="cargar-mas rise-in">
+          <button class="boton-mas" (click)="verMas()">
+            CARGAR MÁS ({{restantes}})
+          </button>
+        </div>
+
+        <div *ngIf="!cargando && !visibles.length && catalogo.length" class="vacio rise-in">
+          <div class="vacio-txt">Sin coincidencias en tu catálogo.<br/>Prueba otro término o cambia de pestaña.</div>
+        </div>
+
+        <div *ngIf="!cargando && !catalogo.length" class="vacio rise-in">
           <div class="foto foto-gigante"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M15.5 4.5 3.4 10.2c-.8.4-.7 1.5.1 1.8l3.9 1.4 1.7 3.2 4.1-4.6"/></svg></div>
           <div class="vacio-txt">Aún no hay nada guardado.<br/>Busca una película o serie arriba para empezar el canal.</div>
         </div>
@@ -136,6 +212,7 @@
     </div>
   </aside>
 
+  <!-- panel central: previsualización del post -->
   <section class="escena">
     <ng-container *ngIf="cargando">
       <div class="escena-cab sk"></div>
@@ -167,11 +244,11 @@
       <div class="bollo rise-in">
         <div class="bollo-media" *ngIf="poster(panel)" [style.backgroundImage]="'url(' + poster(panel) + ')'"></div>
         <div class="bollo-media bollo-media-mono" *ngIf="!poster(panel)">
-          <span>{{nombreTitulo(nombre(panel))}}</span>
+          <span>{{nombreTitulo(panel.titulo)}}</span>
         </div>
         <div class="bollo-cab">
-          <div class="bollo-nombre">{{nombre(panel)}}</div>
-          <span class="tally">visto 0 · 14:32</span>
+          <div class="bollo-nombre">{{panel.titulo}}</div>
+          <span class="tally" *ngIf="panel.comentarios_count">💬 {{panel.comentarios_count}}</span>
         </div>
         <div class="bollo-caption" [class.vacio-caption]="!captionPanel(panel)">
           {{captionPanel(panel) || '…'}}
@@ -180,7 +257,15 @@
 
       <div class="escena-pie">
         <button class="boton-accion" (click)="abrir(panel)">ABRIR EN EL GESTOR</button>
-        <span class="tally">Siguiente en la cola de publicación</span>
+        <button
+          *ngIf="panel.estado === 'publicado'"
+          class="boton-comentarios"
+          [class.abierto]="panelComentariosAbierto"
+          (click)="panelComentariosAbierto ? cerrarPanelComentarios() : abrirPanelComentarios()"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          <span *ngIf="panel.comentarios_count"> {{panel.comentarios_count}}</span>
+        </button>
       </div>
     </ng-container>
 
@@ -188,5 +273,38 @@
       <div class="escena-titulo tally">El canal espera su primer estreno</div>
       <p class="escena-txt dimmed">Guarda una película o serie desde la barra de búsqueda y aquí vas a ver una previa idéntica a lo que se publicará.</p>
     </ng-container>
+  </section>
+
+  <!-- panel derecho: comentarios -->
+  <section class="panel-comentarios" *ngIf="panelComentariosAbierto && panel">
+    <header class="pc-cab">
+      <div class="pc-cab-txt">
+        <span class="pc-cab-titulo">Comentarios</span>
+        <span class="pc-cab-nombre">{{panel.titulo}}</span>
+      </div>
+      <button class="pc-cerrar" (click)="cerrarPanelComentarios()" aria-label="Cerrar comentarios">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
+      </button>
+    </header>
+
+    <div class="pc-cuerpo">
+      <div *ngIf="cargandoComentarios" class="pc-cargando">
+        <span class="spinner"></span>
+        <span>Cargando comentarios…</span>
+      </div>
+
+      <div *ngIf="!cargandoComentarios && !comentariosPost.length" class="pc-vacio">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        <span>Sin comentarios aún</span>
+      </div>
+
+      <div *ngIf="!cargandoComentarios && comentariosPost.length" class="pc-lista">
+        <div *ngFor="let c of comentariosPost" class="pc-msg">
+          <span class="pc-msg-autor">{{c.autor}}</span>
+          <span class="pc-msg-texto">{{c.texto}}</span>
+          <span class="pc-msg-fecha">{{c.fecha | date:'short'}}</span>
+        </div>
+      </div>
+    </div>
   </section>
 </div>

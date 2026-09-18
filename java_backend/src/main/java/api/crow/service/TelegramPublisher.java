@@ -31,6 +31,8 @@ public class TelegramPublisher {
 
     private static final Duration CONEXION_TIMEOUT = Duration.ofSeconds(10);
     private static final Duration LECTURA_TIMEOUT = Duration.ofSeconds(45);
+    /** Long-poll de getUpdates: puede bloquear hasta 50s server-side, el read timeout lo cubre holgado. */
+    private static final Duration LECTURA_POLL_TIMEOUT = Duration.ofSeconds(70);
 
     private final TelegramProperties telegram;
     private final TmdbProperties tmdb;
@@ -38,6 +40,12 @@ public class TelegramPublisher {
     private final RestClient restClient = RestClient.builder()
             .baseUrl("https://api.telegram.org")
             .requestFactory(fabricaConTimeouts())
+            .build();
+
+    /** Cliente solo para getUpdates: read timeout ampliado por el long-poll. */
+    private final RestClient pollClient = RestClient.builder()
+            .baseUrl("https://api.telegram.org")
+            .requestFactory(fabricaConTimeoutsPoll())
             .build();
 
     private final RestClient posterClient = RestClient.builder()
@@ -48,6 +56,13 @@ public class TelegramPublisher {
         SimpleClientHttpRequestFactory f = new SimpleClientHttpRequestFactory();
         f.setConnectTimeout(CONEXION_TIMEOUT);
         f.setReadTimeout(LECTURA_TIMEOUT);
+        return f;
+    }
+
+    private static SimpleClientHttpRequestFactory fabricaConTimeoutsPoll() {
+        SimpleClientHttpRequestFactory f = new SimpleClientHttpRequestFactory();
+        f.setConnectTimeout(CONEXION_TIMEOUT);
+        f.setReadTimeout(LECTURA_POLL_TIMEOUT);
         return f;
     }
 
@@ -238,6 +253,44 @@ public class TelegramPublisher {
             throw e;
         } catch (Exception e) {
             throw new IllegalStateException("No se pudo llamar a Telegram: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Obtiene actualizaciones del grupo de discusión (long-poll).
+     * Devuelve el nodo "result" del JSON de Telegram (array de updates).
+     * offset: update_id más alto procesado (Telegram no devuelve updates ya leídos).
+     * timeout: espera server-side en segundos (0 = inmediato, 50 = long-poll estándar).
+     * Usa pollClient porque el read timeout debe cubrir el bloqueo del long-poll.
+     */
+    public JsonNode getUpdates(long offset, int timeout) {
+        if (telegram.botToken() == null || telegram.botToken().isBlank()) {
+            throw new IllegalStateException("TELEGRAM_BOT_TOKEN no configurado.");
+        }
+        try {
+            String uri = "/bot" + telegram.botToken() + "/getUpdates?offset=" + offset
+                    + "&timeout=" + timeout
+                    + "&allowed_updates=[\"message\"]";
+            String respBody = pollClient.get()
+                    .uri(uri)
+                    .retrieve()
+                    .onStatus(HttpStatusCode::isError, (request, response) -> {
+                        String texto = new String(response.getBody().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+                        throw new IllegalStateException(descripcion(texto));
+                    })
+                    .body(String.class);
+            if (respBody == null || respBody.isBlank()) {
+                throw new IllegalStateException("Respuesta vacía de Telegram getUpdates");
+            }
+            JsonNode resp = jackson.readTree(respBody);
+            if (!resp.path("ok").asBoolean(false)) {
+                throw new IllegalStateException(resp.path("description").asText("error desconocido de Telegram"));
+            }
+            return resp.path("result");
+        } catch (IllegalStateException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IllegalStateException("No se pudo llamar a Telegram getUpdates: " + e.getMessage());
         }
     }
 

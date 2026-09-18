@@ -34,6 +34,12 @@ angular_frontend/coverage/
 angular_frontend/.angular/
 angular_frontend/test-results
 
+# ------------------------------------------------------------
+# STORAGE   
+# ------------------------------------------------------------
+storage/
+
+
 # Logs 
 **/logs/
 *.log
