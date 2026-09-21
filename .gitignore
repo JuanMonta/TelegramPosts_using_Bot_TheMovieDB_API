@@ -39,6 +39,16 @@ angular_frontend/test-results
 # ------------------------------------------------------------
 storage/
 
+# ------------------------------------------------------------
+# BUILD    
+# ------------------------------------------------------------
+.chrome-profile/
+Build-CanalVideos.bat
+Build-CanalVideos.ps1
+generate-icons.ps1
+Launch-CanalVideos.bat
+Launch-CanalVideos.ps1
+
 
 # Logs 
 **/logs/

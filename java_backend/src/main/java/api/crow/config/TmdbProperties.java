@@ -12,6 +12,7 @@ public record TmdbProperties(
         String posterSize,
         String posterLocalDir,
         int cacheTtlDays,
+        int posterTtlDias,
         List<String> providerRegions,
         int sugerenciasTtlDias
 ) {
@@ -20,6 +21,7 @@ public record TmdbProperties(
         if (posterSize == null || posterSize.isBlank()) posterSize = "w780";
         if (posterLocalDir == null || posterLocalDir.isBlank()) posterLocalDir = "storage/posters";
         if (cacheTtlDays <= 0) cacheTtlDays = 7;
+        if (posterTtlDias <= 0) posterTtlDias = 7;
         if (providerRegions == null || providerRegions.isEmpty())
             providerRegions = List.of("AR", "MX", "CL", "CO", "PE");
         if (sugerenciasTtlDias <= 0) sugerenciasTtlDias = 7;

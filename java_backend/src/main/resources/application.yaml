@@ -67,6 +67,10 @@ app:
     poster-local-dir: storage/posters
     # Días sin volver a consultar la API para un mismo título (caché de datos)
     cache-ttl-days: 7
+    # Días que un póster local permanece en disco desde su descarga; al cumplirse
+    # la fecha se borra y se vuelve a descargar de TMDB bajo demanda. Re-descargar
+    # reinicia el contador (mtime del archivo).
+    poster-ttl-dias: 7
     # Regiones LATAM para disponibilidad en streaming (watch/providers)
     provider-regions: [AR, MX, CL, CO, PE]
   telegram:
