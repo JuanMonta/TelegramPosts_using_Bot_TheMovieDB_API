@@ -89,6 +89,17 @@ public class PublicacionController {
             items.add(m);
         }
 
+        // Por defecto el catálogo se ordena en forma descendente: los más recientes
+        // (por fecha de publicación, o de creación si no han salido) primero.
+        items.sort((a, b) -> {
+            String fa = (String) a.get("fecha");
+            String fb = (String) b.get("fecha");
+            if (fa == null && fb == null) return 0;
+            if (fa == null) return 1;
+            if (fb == null) return -1;
+            return fb.compareTo(fa);
+        });
+
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("total", items.size());
         out.put("borradores", borradores);

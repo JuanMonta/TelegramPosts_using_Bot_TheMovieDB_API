@@ -20,7 +20,21 @@ import {
 
 const PASO_VISIBLES = 30;
 
+type Vista = 'lista' | 'grid';
+
 type FiltroEstado = 'todos' | 'borrador' | 'publicado';
+
+interface CalCelda {
+  fecha: Date;
+  clave: string;
+  num: number;
+  fuera: boolean;
+  hoy: boolean;
+  seleccionado: boolean;
+  total: number;
+  publicados: number;
+  borradores: number;
+}
 
 @Component({
   selector: 'app-home',
@@ -40,8 +54,16 @@ export class HomeComponent implements OnInit, OnDestroy {
 
   filtroEstado: FiltroEstado = 'todos';
   busquedaCatalogo = '';
-  vista: 'lista' | 'grid' = 'lista';
+  vista: Vista = 'lista';
   filasVisibles = PASO_VISIBLES;
+
+  // calendario desplegable (funciona sobre lista y grid)
+  calendarioActivo = false;
+  readonly diasSemana = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+  private readonly MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+  mesAnio = new Date().getFullYear();
+  mesMes = new Date().getMonth();
+  diaSeleccionado: string | null = null;
 
   // panel "escena"
   panel: CatalogoFila | null = null;
@@ -204,16 +226,38 @@ export class HomeComponent implements OnInit, OnDestroy {
     return lista;
   }
 
+  /** Posts filtrados por pestaña/búsqueda y, si el calendario está activo, por día. */
+  private filtradasConCalendario(): CatalogoFila[] {
+    let lista = this.filtradas();
+    if (this.calendarioActivo && this.diaSeleccionado) {
+      lista = lista.filter((t) => {
+        if (t.estado === 'sin') return false;
+        const f = this.fechaDeItem(t);
+        return f !== null && this.fechaClave(f) === this.diaSeleccionado;
+      });
+    }
+    return lista;
+  }
+
   get visibles(): CatalogoFila[] {
+    if (this.calendarioActivo && this.diaSeleccionado) {
+      return this.filtradasConCalendario().slice(0, this.filasVisibles);
+    }
     return this.filtradas().slice(0, this.filasVisibles);
   }
 
   get hayMas(): boolean {
-    return this.filtradas().length > this.filasVisibles;
+    const total = this.calendarioActivo && this.diaSeleccionado
+      ? this.filtradasConCalendario().length
+      : this.filtradas().length;
+    return total > this.filasVisibles;
   }
 
   get restantes(): number {
-    return this.filtradas().length - this.filasVisibles;
+    const total = this.calendarioActivo && this.diaSeleccionado
+      ? this.filtradasConCalendario().length
+      : this.filtradas().length;
+    return total - this.filasVisibles;
   }
 
   verMas(): void {
@@ -234,8 +278,143 @@ export class HomeComponent implements OnInit, OnDestroy {
     this.reseteoPaginado();
   }
 
-  cambiarVista(v: 'lista' | 'grid'): void {
+  cambiarVista(v: Vista): void {
     this.vista = v;
+  }
+
+  toggleCalendario(): void {
+    this.calendarioActivo = !this.calendarioActivo;
+    if (!this.calendarioActivo) {
+      this.diaSeleccionado = null;
+    }
+    this.reseteoPaginado();
+  }
+
+  // ---- calendario ----
+
+  get etiquetaMes(): string {
+    return `${this.MESES[this.mesMes]} ${this.mesAnio}`;
+  }
+
+  get etiquetaDiaSeleccionado(): string {
+    if (!this.diaSeleccionado) return '';
+    const [y, m, d] = this.diaSeleccionado.split('-').map(Number);
+    const fecha = new Date(y, m - 1, d);
+    return fecha.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  }
+
+  mesAnterior(): void {
+    this.mesMes--;
+    if (this.mesMes < 0) {
+      this.mesMes = 11;
+      this.mesAnio--;
+    }
+    this.preseleccionarMes();
+  }
+
+  mesSiguiente(): void {
+    this.mesMes++;
+    if (this.mesMes > 11) {
+      this.mesMes = 0;
+      this.mesAnio++;
+    }
+    this.preseleccionarMes();
+  }
+
+  irHoy(): void {
+    const hoy = new Date();
+    this.mesAnio = hoy.getFullYear();
+    this.mesMes = hoy.getMonth();
+    this.diaSeleccionado = this.fechaClave(hoy);
+  }
+
+  /** Tras navegar de mes, deja seleccionado el primer día del mes que tenga posts. */
+  private preseleccionarMes(): void {
+    const conPosts = this.celdasMes().filter((c) => !c.fuera && c.total > 0);
+    this.diaSeleccionado = conPosts.length ? conPosts[0].clave : null;
+  }
+
+  /** 42 celdas (6 semanas desde el domingo) del mes activo, con sus conteos. */
+  celdasMes(): CalCelda[] {
+    const mesActivo = this.mesMes;
+    const anioActivo = this.mesAnio;
+    const primer = new Date(anioActivo, mesActivo, 1);
+    const inicio = new Date(anioActivo, mesActivo, 1 - primer.getDay());
+    const hoyClave = this.fechaClave(new Date());
+
+    const porClave = new Map<string, { publicados: number; borradores: number; total: number }>();
+    for (const t of this.itemsConPost()) {
+      const f = this.fechaDeItem(t);
+      if (!f) continue;
+      const k = this.fechaClave(f);
+      let e = porClave.get(k);
+      if (!e) {
+        e = { publicados: 0, borradores: 0, total: 0 };
+        porClave.set(k, e);
+      }
+      e.total++;
+      if (t.estado === 'publicado') e.publicados++;
+      else e.borradores++;
+    }
+
+    const celdas: CalCelda[] = [];
+    for (let i = 0; i < 42; i++) {
+      const fecha = new Date(anioActivo, mesActivo, 1 - primer.getDay() + i);
+      const clave = this.fechaClave(fecha);
+      const cnt = porClave.get(clave);
+      celdas.push({
+        fecha,
+        clave,
+        num: fecha.getDate(),
+        fuera: fecha.getMonth() !== mesActivo || fecha.getFullYear() !== anioActivo,
+        hoy: clave === hoyClave,
+        seleccionado: clave === this.diaSeleccionado,
+        total: cnt?.total ?? 0,
+        publicados: cnt?.publicados ?? 0,
+        borradores: cnt?.borradores ?? 0
+      });
+    }
+    return celdas;
+  }
+
+  elegirDia(c: CalCelda): void {
+    if (this.diaSeleccionado === c.clave) {
+      this.diaSeleccionado = null;
+    } else {
+      this.diaSeleccionado = c.clave;
+    }
+    this.reseteoPaginado();
+  }
+
+  limpiarDiaCalendario(): void {
+    this.diaSeleccionado = null;
+    this.reseteoPaginado();
+  }
+
+  /** Posts del día seleccionado (respeta filtro de estado y búsqueda activos). */
+  postsDelDia(): CatalogoFila[] {
+    if (!this.diaSeleccionado) return [];
+    return this.itemsConPost().filter((t) => {
+      const f = this.fechaDeItem(t);
+      return f !== null && this.fechaClave(f) === this.diaSeleccionado;
+    });
+  }
+
+  /** Item con publicación propia (excluye 'sin'); los 'sin' no tienen fecha de post. */
+  private itemsConPost(): CatalogoFila[] {
+    return this.filtradas().filter((t) => t.estado !== 'sin');
+  }
+
+  private fechaDeItem(t: CatalogoFila): Date | null {
+    if (!t.fecha) return null;
+    const d = new Date(t.fecha);
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  private fechaClave(d: Date): string {
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${d.getFullYear()}-${m}-${dd}`;
   }
 
   private reseteoPaginado(): void {

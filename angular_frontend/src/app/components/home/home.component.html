@@ -133,6 +133,50 @@
             <button class="btn-vista" [class.activa]="vista === 'grid'" (click)="cambiarVista('grid')" title="Ver como cuadrícula" aria-label="Ver como cuadrícula">
               <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
             </button>
+            <button class="btn-vista" [class.activa]="calendarioActivo" (click)="toggleCalendario()" title="Calendario" aria-label="Calendario">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="17" rx="2"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="3" y1="9" x2="21" y2="9"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- calendario desplegable (funciona sobre lista y grid) -->
+        <div *ngIf="calendarioActivo" class="cal-panel rise-in">
+          <div class="cal-panel-cab">
+            <button class="cal-nav" (click)="mesAnterior()" aria-label="Mes anterior" title="Mes anterior">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+            </button>
+            <div class="cal-panel-titulo">
+              <span class="cal-mes">{{etiquetaMes}}</span>
+              <button class="cal-hoy" (click)="irHoy()">HOY</button>
+            </div>
+            <button class="cal-nav" (click)="mesSiguiente()" aria-label="Mes siguiente" title="Mes siguiente">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
+          </div>
+          <div class="cal-grid">
+            <span *ngFor="let d of diasSemana" class="cal-dow">{{d}}</span>
+            <button
+              *ngFor="let c of celdasMes()"
+              class="cal-celda"
+              [class.fuera]="c.fuera"
+              [class.hoy]="c.hoy"
+              [class.sel]="c.seleccionado"
+              [class.con-posts]="c.total > 0"
+              (click)="elegirDia(c)"
+              [attr.title]="c.total ? (c.publicados + ' publicados · ' + c.borradores + ' borradores') : 'Sin posts'"
+              tabindex="0"
+            >
+              <span class="cal-num">{{c.num}}</span>
+              <span class="cal-cnt" *ngIf="c.total">{{c.total}}</span>
+              <span class="cal-lien" *ngIf="c.total">
+                <span class="cal-dot pub" *ngIf="c.publicados"></span>
+                <span class="cal-dot bnd" *ngIf="c.borradores"></span>
+              </span>
+            </button>
+          </div>
+          <div *ngIf="diaSeleccionado" class="cal-filtro-info">
+            <span class="tally">{{etiquetaDiaSeleccionado}} · {{postsDelDia().length}} post<ng-container *ngIf="postsDelDia().length !== 1">s</ng-container></span>
+            <button class="enlace" (click)="limpiarDiaCalendario()">MOSTRAR TODOS</button>
           </div>
         </div>
 
