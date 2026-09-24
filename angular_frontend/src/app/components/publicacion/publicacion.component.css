@@ -168,6 +168,32 @@
   flex-wrap: wrap;
   gap: 6px;
   margin-top: 8px;
+  align-items: center;
+}
+.chip-id {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding-right: 4px;
+}
+.chip-copy {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  color: var(--text-faint);
+  flex: none;
+  transition: background 120ms ease, color 120ms ease;
+}
+.chip-copy:hover { background: var(--bg-hover); color: var(--text-primary); }
+.chip-copy.copiado { color: #2ecc71; background: rgba(46, 204, 113, 0.14); }
+.copiado-tip {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  color: #2ecc71;
+  animation: rise-in 160ms ease;
 }
 .ficha-rating {
   flex: none;

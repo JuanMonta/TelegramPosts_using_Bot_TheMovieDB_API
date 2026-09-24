@@ -70,7 +70,14 @@
             <div class="ficha-nombre">{{nombre()}}</div>
             <div class="tally">{{tipo()}} · {{titulo.titulo_original}}<ng-container *ngIf="titulo.anio"> · {{titulo.anio}}</ng-container></div>
             <div class="ficha-chips" *ngIf="titulo.tmdb_id">
-              <span class="chip mono">{{titulo.tmdb_id}}</span>
+              <span class="chip mono chip-id">
+                {{titulo.tmdb_id}}
+                <button class="chip-copy" (click)="copiarId()" [class.copiado]="idCopiado" [attr.aria-label]="idCopiado ? 'Copiado' : 'Copiar ID'" [title]="idCopiado ? '¡Copiado!' : 'Copiar ID'">
+                  <svg *ngIf="!idCopiado" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v3"/></svg>
+                  <svg *ngIf="idCopiado" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+                </button>
+              </span>
+              <span class="copiado-tip" *ngIf="idCopiado">copiado</span>
             </div>
             <div class="ficha-chips">
               <span *ngFor="let g of generos()" class="chip">{{g}}</span>

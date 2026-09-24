@@ -69,6 +69,9 @@ export class PublicacionComponent implements OnInit, OnDestroy {
   confirmandoBorrado = false;
   confirmandoRepost = false;
 
+  idCopiado = false;
+  private copiarTimer: number | undefined;
+
   disposicion: 'pila' | 'lado' = 'pila';
 
   links: FilaLink[] = [];
@@ -149,6 +152,9 @@ export class PublicacionComponent implements OnInit, OnDestroy {
     this.killed.complete();
     if (this.temporizadorCaption !== undefined) {
       window.clearTimeout(this.temporizadorCaption);
+    }
+    if (this.copiarTimer !== undefined) {
+      window.clearTimeout(this.copiarTimer);
     }
   }
 
@@ -752,6 +758,39 @@ export class PublicacionComponent implements OnInit, OnDestroy {
   abrirComentario(): void {
     const link = this.linkComentario;
     if (link) window.open(link, '_blank');
+  }
+
+  copiarId(): void {
+    const id = this.titulo?.tmdb_id;
+    if (id == null) return;
+    const texto = String(id);
+    const marcarCopiado = () => {
+      this.idCopiado = true;
+      if (this.copiarTimer !== undefined) window.clearTimeout(this.copiarTimer);
+      this.copiarTimer = window.setTimeout(() => (this.idCopiado = false), 1800);
+    };
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(texto).then(marcarCopiado).catch(() => this.fallbackCopiar(texto, marcarCopiado));
+    } else {
+      this.fallbackCopiar(texto, marcarCopiado);
+    }
+  }
+
+  private fallbackCopiar(texto: string, ok: () => void): void {
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = texto;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      ok();
+    } catch {
+      /* sin clipboard disponible */
+    }
   }
 
   confirmarBorrado(): void {
