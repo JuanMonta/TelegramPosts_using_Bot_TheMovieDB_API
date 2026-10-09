@@ -8,8 +8,10 @@ import { PublicacionesService } from '../../services/publicaciones.service';
 import { TmdbService } from '../../services/tmdb.service';
 import { ApiService } from '../../services/api.service';
 import { NavegacionService } from '../../services/navegacion.service';
+import { ColaService } from '../../services/cola.service';
 import {
   CatalogoFila,
+  ColaItem,
   Comentario,
   Publicacion,
   SugerenciaHit,
@@ -95,17 +97,28 @@ export class HomeComponent implements OnInit, OnDestroy {
   /** Distingue la carga inicial de las vueltas posteriores a la ruta. */
   private primeraCarga = true;
 
+  // cola de publicaciones programadas (modal)
+  colaAbierta = false;
+  colaItems: ColaItem[] = [];
+  cargandoCola = false;
+  colaNuevoId = 0;
+  colaNuevaFecha = '';
+  colaAccion = false;
+  private colaTimer: number | undefined;
+
   constructor(
     private publicacionesService: PublicacionesService,
     private tmdbService: TmdbService,
     private api: ApiService,
     private snack: MatSnackBar,
     private router: Router,
-    private navegacion: NavegacionService
+    private navegacion: NavegacionService,
+    private colaService: ColaService
   ) {}
 
   ngOnInit(): void {
     this.cargar();
+    this.refrescarColaSilencioso();
     // La instancia se reutiliza (RouteReuseStrategy). Al volver de /publicacion/:id
     // se refrescan los datos en silencio conservando el estado de la UI
     // (selección, filtros, búsqueda, vista, panel de comentarios).
@@ -125,6 +138,9 @@ export class HomeComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this.killed.next();
     this.killed.complete();
+    if (this.colaTimer !== undefined) {
+      window.clearInterval(this.colaTimer);
+    }
   }
 
   cargar(): void {
@@ -190,6 +206,7 @@ export class HomeComponent implements OnInit, OnDestroy {
             if (this.panelComentariosAbierto && this.panel) {
               this.cargarComentariosDe(this.panel);
             }
+            this.refrescarColaSilencioso();
             setTimeout(() => this.restaurarScrollLista(), 0);
           },
           error: () => { /* el estado anterior sigue en pie si el refresh falla */ }
@@ -457,6 +474,138 @@ export class HomeComponent implements OnInit, OnDestroy {
   abrir(t: { id: number }): void {
     this.navegacion.vinoDeHome = true;
     this.router.navigate(['/publicacion', t.id]);
+  }
+
+  // ---- cola de publicaciones programadas ----
+
+  abrirCola(): void {
+    this.colaAbierta = true;
+    this.cargarCola();
+    if (this.colaTimer === undefined) {
+      this.colaTimer = window.setInterval(() => this.cargarColaSilencioso(), 20000);
+    }
+  }
+
+  cerrarCola(): void {
+    this.colaAbierta = false;
+    if (this.colaTimer !== undefined) {
+      window.clearInterval(this.colaTimer);
+      this.colaTimer = undefined;
+    }
+    this.refrescarDatos();
+  }
+
+  private cargarCola(): void {
+    this.cargandoCola = true;
+    this.colaService.listar().pipe(takeUntil(this.killed)).subscribe({
+      next: (items) => {
+        this.colaItems = items.sort((a, b) => (a.programado_para ?? '').localeCompare(b.programado_para ?? ''));
+        this.cargandoCola = false;
+      },
+      error: () => {
+        this.cargandoCola = false;
+      }
+    });
+  }
+
+  private cargarColaSilencioso(): void {
+    if (!this.colaAbierta || this.colaAccion) return;
+    this.colaService.listar().pipe(takeUntil(this.killed)).subscribe({
+      next: (items) => (this.colaItems = items.sort((a, b) => (a.programado_para ?? '').localeCompare(b.programado_para ?? '')))
+    });
+  }
+
+  /** Actualiza la lista de la cola (para el badge del header) sin abrir el modal. */
+  private refrescarColaSilencioso(): void {
+    this.colaService.listar().pipe(takeUntil(this.killed)).subscribe({
+      next: (items) => (this.colaItems = items.sort((a, b) => (a.programado_para ?? '').localeCompare(b.programado_para ?? ''))),
+      error: () => undefined
+    });
+  }
+
+  /** Items pendientes de publicar (badge del botón COLA). */
+  get colaPendientes(): number {
+    return this.colaItems.filter((i) => i.estado === 'pendiente' || i.estado === 'publicando').length;
+  }
+
+  /** Borradores disponibles para añadir a la cola (solo los que no tienen item activo). */
+  colaBorradores(): CatalogoFila[] {
+    const activos = new Set(this.colaItems.filter((i) => i.estado === 'pendiente' || i.estado === 'publicando').map((i) => i.publicacion_id));
+    return this.catalogo.filter((t) => t.estado === 'borrador' && t.publicacion_id != null && !activos.has(t.publicacion_id));
+  }
+
+  programarNuevo(): void {
+    if (!this.colaNuevoId || !this.colaNuevaFecha || this.colaAccion) return;
+    this.colaAccion = true;
+    this.colaService.programar(this.colaNuevoId, this.colaNuevaFecha).pipe(takeUntil(this.killed)).subscribe({
+      next: (item) => {
+        this.colaItems = [...this.colaItems, item];
+        this.colaNuevoId = 0;
+        this.colaNuevaFecha = '';
+        this.colaAccion = false;
+        this.snack.open('Añadido a la cola', '✓', { duration: 2500 });
+      },
+      error: (e: HttpErrorResponse) => {
+        this.colaAccion = false;
+        this.snack.open(this.api.mensajeDeError(e), 'OK', { duration: 6000 });
+      }
+    });
+  }
+
+  cancelarItemCola(item: ColaItem): void {
+    if (this.colaAccion || item.estado !== 'pendiente') return;
+    this.colaAccion = true;
+    this.colaService.cancelar(item.id).pipe(takeUntil(this.killed)).subscribe({
+      next: () => {
+        this.colaItems = this.colaItems.map((i) => (i.id === item.id ? { ...i, estado: 'cancelado' } : i));
+        this.colaAccion = false;
+      },
+      error: (e: HttpErrorResponse) => {
+        this.colaAccion = false;
+        this.snack.open(this.api.mensajeDeError(e), 'OK', { duration: 6000 });
+        // La cola pudo publicar el post justo en ese momento: refrescar la lista.
+        this.cargarColaSilencioso();
+      }
+    });
+  }
+
+  /** Vuelve a poner un item fallido/cancelado en 'pendiente' (se publica en el próximo tick, ~30s). */
+  reintentarItemCola(item: ColaItem): void {
+    if (this.colaAccion || (item.estado !== 'fallo' && item.estado !== 'cancelado')) return;
+    this.colaAccion = true;
+    this.colaService.reintentar(item.id).pipe(takeUntil(this.killed)).subscribe({
+      next: (actualizado) => {
+        this.colaItems = this.colaItems.map((i) => (i.id === item.id ? actualizado : i));
+        this.colaAccion = false;
+        this.snack.open('Reintentando en los próximos segundos…', '✓', { duration: 2500 });
+      },
+      error: (e: HttpErrorResponse) => {
+        this.colaAccion = false;
+        this.snack.open(this.api.mensajeDeError(e), 'OK', { duration: 6000 });
+        this.cargarColaSilencioso();
+      }
+    });
+  }
+
+  etiquetaEstadoCola(e: string): string {
+    const mapa: Record<string, string> = {
+      pendiente: 'PENDIENTE',
+      publicando: 'PUBLICANDO…',
+      publicado: 'PUBLICADO',
+      fallo: 'FALLÓ',
+      cancelado: 'CANCELADO'
+    };
+    return mapa[e] ?? e;
+  }
+
+  /** "29 ago 2026 · 21:00" para las fechas de la cola. */
+  fmtColaFecha(iso: string | null | undefined): string {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return iso;
+    const fecha = d.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
+    const hora = d.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+    return `${fecha} · ${hora}`;
   }
 
   // ---- helpers de presentación ----

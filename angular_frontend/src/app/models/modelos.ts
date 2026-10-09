@@ -85,6 +85,7 @@ export interface CatalogoFila {
   estado: 'borrador' | 'publicado' | 'sin';
   fecha: string | null;
   comentarios_count: number;
+  programado_para?: string | null;
 }
 
 export interface Comentario {
@@ -100,6 +101,21 @@ export interface CatalogoRespuesta {
   publicados: number;
   sin: number;
   items: CatalogoFila[];
+}
+
+/** Item de la cola de publicaciones programadas. */
+export interface ColaItem {
+  id: number;
+  publicacion_id: number;
+  titulo_id: number;
+  titulo: string;
+  programado_para: string | null;
+  estado: 'pendiente' | 'publicando' | 'publicado' | 'fallo' | 'cancelado';
+  modo?: 'real' | 'test' | null;
+  error?: string | null;
+  publicado_en?: string | null;
+  telegram_message_id?: number | null;
+  creado_en?: string | null;
 }
 
 export function nombreMostrable(t: { titulo_latino: string | null; titulo_original: string }): string {

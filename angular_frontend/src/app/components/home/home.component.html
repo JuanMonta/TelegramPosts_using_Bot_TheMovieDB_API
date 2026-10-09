@@ -8,7 +8,13 @@
         <h1>CANAL DE VIDEOS</h1>
         <span class="tally">{{total}} guardados · {{borradores}} borrador<ng-container *ngIf="borradores !== 1">es</ng-container> · {{publicados}} publ<ng-container *ngIf="publicados !== 1">icados</ng-container><ng-container *ngIf="publicados === 1">icado</ng-container></span>
       </div>
-      <div class="pane-modo"><app-modo-toggle (modoCambiado)="recargarTrasModo()"></app-modo-toggle></div>
+      <div class="pane-modo">
+        <button class="cola-btn" (click)="abrirCola()" title="Cola de publicaciones programadas" aria-label="Cola de publicaciones">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9.5"/><polyline points="12 6.5 12 12 15.5 14.5"/></svg>
+          <span class="cola-btn-cnt" *ngIf="colaPendientes" title="">{{colaPendientes}}</span>
+        </button>
+        <app-modo-toggle (modoCambiado)="recargarTrasModo()"></app-modo-toggle>
+      </div>
     </header>
 
     <div class="busqueda">
@@ -202,6 +208,7 @@
                 <span *ngIf="t.anio" class="dimmed">{{t.anio}}</span>
                 <span *ngIf="t.rating" class="tally">★ {{t.rating.toFixed(1)}}</span>
                 <span *ngIf="t.comentarios_count" class="tally chip-comentarios">💬 {{t.comentarios_count}}</span>
+                <span *ngIf="t.programado_para" class="chip chip-cola" title="Programado en la cola">⏰ {{fmtColaFecha(t.programado_para)}}</span>
                 <span *ngIf="t.generos" class="fila-sinopsis">{{t.generos}}</span>
               </div>
             </div>
@@ -233,6 +240,7 @@
               <div class="grid-nombre">{{t.titulo}}</div>
               <div class="grid-sub">
                 <span>{{tipo(t.tipo)}}</span><span *ngIf="t.anio"> · {{t.anio}}</span><span *ngIf="t.rating"> · ★{{t.rating.toFixed(1)}}</span><span *ngIf="t.comentarios_count"> · 💬{{t.comentarios_count}}</span>
+                <span *ngIf="t.programado_para" class="chip chip-cola" title="Programado en la cola">⏰ {{fmtColaFecha(t.programado_para)}}</span>
               </div>
             </div>
           </button>
@@ -352,4 +360,63 @@
       </div>
     </div>
   </section>
+</div>
+
+<!-- modal: cola de publicaciones programadas -->
+<div class="modal-fondo" *ngIf="colaAbierta" (click)="cerrarCola()">
+  <div class="modal-carta cola-carta" (click)="$event.stopPropagation()">
+    <div class="modal-cab">
+      <span class="tally">COLA DE PUBLICACIONES</span>
+      <span class="tally dimmed">El bot publica cada borrador a su hora, en el modo (real/prueba) con que se programe.</span>
+    </div>
+
+    <div *ngIf="cargandoCola && !colaItems.length" class="cola-cargando">
+      <span class="spinner"></span>
+      <span class="tally">Cargando cola…</span>
+    </div>
+
+    <div class="cola-alta">
+      <select class="cola-select" [(ngModel)]="colaNuevoId" title="Elegí un borrador">
+        <option [ngValue]="0" disabled>Elegí un borrador…</option>
+        <option *ngFor="let t of colaBorradores()" [ngValue]="t.publicacion_id">{{t.titulo}}</option>
+      </select>
+      <input type="datetime-local" class="cola-input" [(ngModel)]="colaNuevaFecha" title="Fecha y hora de publicación" />
+      <button class="boton-accion cola-alta-btn" (click)="programarNuevo()" [disabled]="!colaNuevoId || !colaNuevaFecha || colaAccion">
+        <span *ngIf="!colaAccion">AÑADIR</span>
+        <span class="spinner" *ngIf="colaAccion"></span>
+      </button>
+    </div>
+
+    <div *ngIf="!cargandoCola && !colaItems.length" class="cola-vacio">
+      <span class="tally dimmed">Sin publicaciones programadas. Elegí un borrador y una hora arriba.</span>
+    </div>
+
+    <ul class="cola-lista" *ngIf="colaItems.length">
+      <li *ngFor="let i of colaItems" class="cola-fila rise-in" [class.cola-fallo]="i.estado === 'fallo'" [class.cola-tachado]="i.estado === 'cancelado'">
+        <div class="cola-info">
+          <span class="cola-titulo">{{i.titulo}}</span>
+          <span class="tally">
+            <span class="cola-ico" aria-hidden="true">⏰</span> {{fmtColaFecha(i.programado_para)}}
+            <span class="chip cola-modo" [class.cola-modo-test]="i.modo === 'test'">{{i.modo === 'test' ? 'PRUEBA' : 'REAL'}}</span>
+          </span>
+          <span *ngIf="i.estado === 'publicado' && i.publicado_en" class="tally cola-publicado">publicado {{fmtColaFecha(i.publicado_en)}}</span>
+          <span *ngIf="i.estado === 'fallo' && i.error" class="cola-error">{{i.error}}</span>
+        </div>
+        <div class="cola-der">
+          <span class="chip" [class.cola-chip-pend]="i.estado === 'pendiente'" [class.cola-chip-encurso]="i.estado === 'publicando'" [class.chip-live]="i.estado === 'publicado'" [class.cola-chip-fallo]="i.estado === 'fallo'">{{etiquetaEstadoCola(i.estado)}}</span>
+          <button *ngIf="i.estado === 'fallo' || i.estado === 'cancelado'" class="cola-retry" (click)="reintentarItemCola(i)" title="Reintentar publicación" [disabled]="colaAccion">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg>
+            <span>REINTENTAR</span>
+          </button>
+          <button *ngIf="i.estado === 'pendiente'" class="cola-x" (click)="cancelarItemCola(i)" title="Cancelar programación" aria-label="Cancelar" [disabled]="colaAccion">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
+          </button>
+        </div>
+      </li>
+    </ul>
+
+    <div class="modal-pie">
+      <button class="enlace" (click)="cerrarCola()">CERRAR</button>
+    </div>
+  </div>
 </div>

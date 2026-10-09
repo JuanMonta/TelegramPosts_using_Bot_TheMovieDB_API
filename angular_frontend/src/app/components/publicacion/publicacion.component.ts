@@ -8,9 +8,11 @@ import { takeUntil } from 'rxjs/operators';
 import { TitulosService } from '../../services/titulos.service';
 import { PublicacionesService } from '../../services/publicaciones.service';
 import { CaptionTemplateService, CaptionTemplate } from '../../services/caption-template.service';
+import { ColaService } from '../../services/cola.service';
 import { ApiService } from '../../services/api.service';
 import { NavegacionService } from '../../services/navegacion.service';
 import {
+  ColaItem,
   LinkVideo,
   Publicacion,
   TituloDetalle,
@@ -67,10 +69,18 @@ export class PublicacionComponent implements OnInit, OnDestroy {
   publicando = false;
   editando = false;
   confirmandoBorrado = false;
-  confirmandoRepost = false;
+confirmandoRepost = false;
+  confirmandoEliminar = false;
+
+  // cola de publicaciones programadas
+  colaActiva: ColaItem | null = null;
+  programando = false;
+  programarPara = '';
+  accionCola = false;
 
   idCopiado = false;
   private copiarTimer: number | undefined;
+  private colaPollTimer: number | undefined;
 
   disposicion: 'pila' | 'lado' = 'pila';
 
@@ -113,6 +123,7 @@ export class PublicacionComponent implements OnInit, OnDestroy {
     private titulosService: TitulosService,
     private publicacionesService: PublicacionesService,
     private captionTemplateService: CaptionTemplateService,
+    private colaService: ColaService,
     private api: ApiService,
     private snack: MatSnackBar,
     private navegacion: NavegacionService
@@ -155,6 +166,9 @@ export class PublicacionComponent implements OnInit, OnDestroy {
     }
     if (this.copiarTimer !== undefined) {
       window.clearTimeout(this.copiarTimer);
+    }
+    if (this.colaPollTimer !== undefined) {
+      window.clearInterval(this.colaPollTimer);
     }
   }
 
@@ -217,6 +231,7 @@ export class PublicacionComponent implements OnInit, OnDestroy {
     this.estado = p.estado;
     this.caption = p.caption ?? this.captionPorDefecto(this.titulo!);
     this.cargando = false;
+    this.cargarColaActiva();
   }
 
   // ---- helpers de visualización ----
@@ -690,11 +705,19 @@ export class PublicacionComponent implements OnInit, OnDestroy {
         this.publicacion = listo;
         this.estado = listo.estado;
         this.publicando = false;
+        if (this.colaActiva) {
+          this.colaService.cancelar(this.colaActiva.id).pipe(takeUntil(this.killed)).subscribe({
+            next: () => (this.colaActiva = null),
+            error: () => (this.colaActiva = null)
+          });
+        }
         this.snack.open('Publicado en el canal', '✓', { duration: 3000 });
       },
       error: (e: HttpErrorResponse) => {
         this.publicando = false;
         this.snack.open(this.api.mensajeDeError(e), 'OK', { duration: 6000 });
+        // Puede haber ocurrido que la cola publicó el post en el ínterin.
+        this.recargarEstado(false);
       }
     });
   }
@@ -748,6 +771,170 @@ export class PublicacionComponent implements OnInit, OnDestroy {
 
   cancelarRepost(): void {
     this.confirmandoRepost = false;
+  }
+
+  /** Elimina el mensaje del canal y devuelve el registro a borrador (deshacer publicación). */
+  async eliminarDelCanal(): Promise<void> {
+    if (!this.publicacion || this.editando || this.publicando) return;
+    this.editando = true;
+    this.confirmandoEliminar = false;
+    await this.forzarGuardado();
+    const p = this.publicacion;
+    if (!p) { this.editando = false; return; }
+    this.publicacionesService.eliminarDelCanal(p.id).pipe(takeUntil(this.killed)).subscribe({
+      next: (borrador) => {
+        this.publicacion = borrador;
+        this.estado = borrador.estado;
+        this.editando = false;
+        this.snack.open('Post eliminado del canal. Volvió a borrador.', '✓', { duration: 3000 });
+      },
+      error: (e: HttpErrorResponse) => {
+        this.editando = false;
+        this.snack.open(this.api.mensajeDeError(e), 'OK', { duration: 6000 });
+      }
+    });
+  }
+
+  confirmarEliminar(): void {
+    this.confirmandoEliminar = true;
+  }
+
+  cancelarEliminar(): void {
+    this.confirmandoEliminar = false;
+  }
+
+  // ---- cola de publicaciones programadas ----
+
+  /** Carga el estado de la cola para esta publicación (si está programada). */
+  cargarColaActiva(): void {
+    if (!this.publicacion) return;
+    this.colaService.activoDePublicacion(this.publicacion.id).pipe(takeUntil(this.killed)).subscribe({
+      next: (item) => {
+        const habiaActiva = !!this.colaActiva;
+        this.colaActiva = item;
+        this.ajustarPollCola();
+        if (habiaActiva && !item) {
+          // La cola ya procesó el post (publicado/cancelado) mientras miraba: refrescar UI.
+          this.recargarEstado(true);
+        }
+      },
+      error: () => this.ajustarPollCola()
+    });
+  }
+
+  /**
+   * Mientras haya un item activo, vigila cada 15s: si la cola lo publica solo,
+   * la UI pasa sola a las acciones del post publicado.
+   */
+  private ajustarPollCola(): void {
+    const activo = !!this.colaActiva;
+    if (activo && this.colaPollTimer === undefined) {
+      this.colaPollTimer = window.setInterval(() => {
+        const pub = this.publicacion;
+        if (!pub) return;
+        this.cargarColaActiva();
+      }, 15000);
+    } else if (!activo && this.colaPollTimer !== undefined) {
+      window.clearInterval(this.colaPollTimer);
+      this.colaPollTimer = undefined;
+    }
+  }
+
+  /**
+   * Recarga el post desde el backend tras un conflicto de la cola (el scheduler
+   * publicó el borrador en el ínterin). Así se muestran los botones del post
+   * publicado en lugar de los del borrador.
+   */
+  private recargarEstado(yaPublicado: boolean): void {
+    const t = this.titulo;
+    if (!t) { this.ajustarPollCola(); return; }
+    this.publicacionesService.listar().pipe(takeUntil(this.killed)).subscribe({
+      next: (pubs) => {
+        const existente = pubs.find((p) => p.titulo_id === t.id);
+        if (existente) {
+          this.establecerPublicacion(existente);
+          if (yaPublicado) {
+            this.snack.open('El post se publicó desde la cola. Mostrando las acciones de publicación.', 'OK', { duration: 4000 });
+          }
+        } else {
+          this.cargarColaActiva();
+        }
+      },
+      error: () => this.cargarColaActiva()
+    });
+  }
+
+  /** "hoy 21:00" / "mañana 21:00" / "+1h" para los presets del programador. */
+  private soloFecha(d: Date): string {
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${d.getFullYear()}-${m}-${dd}`;
+  }
+
+  private horaStr(d: Date): string {
+    const h = String(d.getHours()).padStart(2, '0');
+    const mi = String(d.getMinutes()).padStart(2, '0');
+    return `${h}:${mi}`;
+  }
+
+  setProgramar(horasOffset: number, forzarHora?: number): void {
+    const d = new Date();
+    d.setTime(d.getTime() + horasOffset * 3600_000);
+    if (forzarHora !== undefined) d.setHours(forzarHora, 0, 0, 0);
+    this.programarPara = `${this.soloFecha(d)}T${this.horaStr(d)}`;
+  }
+
+  abrirProgramacion(): void {
+    this.programando = true;
+    if (!this.programarPara) this.setProgramar(1);
+  }
+
+  cancelarProgramacion(): void {
+    this.programando = false;
+  }
+
+  confirmarProgramar(): void {
+    const pub = this.publicacion;
+    if (!pub || !this.programarPara || this.accionCola) return;
+    this.accionCola = true;
+    this.colaService.programar(pub.id, this.programarPara).pipe(takeUntil(this.killed)).subscribe({
+      next: (item) => {
+        this.colaActiva = item;
+        this.programando = false;
+        this.accionCola = false;
+        this.snack.open('Programado en la cola', '✓', { duration: 3000 });
+      },
+      error: (e: HttpErrorResponse) => {
+        this.accionCola = false;
+        this.snack.open(this.api.mensajeDeError(e), 'OK', { duration: 6000 });
+      }
+    });
+  }
+
+  cancelarProgramacionActiva(): void {
+    const item = this.colaActiva;
+    if (!item || this.accionCola) return;
+    this.accionCola = true;
+    this.colaService.cancelar(item.id).pipe(takeUntil(this.killed)).subscribe({
+      next: () => {
+        this.colaActiva = null;
+        this.ajustarPollCola();
+        this.accionCola = false;
+        this.snack.open('Programación cancelada', '✓', { duration: 2500 });
+      },
+      error: (e: HttpErrorResponse) => {
+        this.accionCola = false;
+        this.snack.open(this.api.mensajeDeError(e), 'OK', { duration: 6000 });
+        // La cola pudo publicar el post justo antes de cancelar: recargar el estado.
+        this.cargarColaActiva();
+      }
+    });
+  }
+
+  /** "29 ago 2026 · 21:00" para mostrar la hora programada. */
+  fmtProgramado(iso: string | null | undefined): string {
+    if (!iso) return '';
+    return this.fmtFechaHora(iso);
   }
 
   /** Deep link al post en el canal (su hilo de comentarios queda a un clic). */

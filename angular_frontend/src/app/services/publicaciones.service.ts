@@ -36,6 +36,11 @@ export class PublicacionesService {
     return this.api.post<Publicacion>(`/api/publicaciones/${id}/republicar`);
   }
 
+  /** Elimina el mensaje del canal y devuelve el registro a borrador. */
+  eliminarDelCanal(id: number): Observable<Publicacion> {
+    return this.api.post<Publicacion>(`/api/publicaciones/${id}/eliminar-del-canal`, {});
+  }
+
   comentarios(publicacionId: number): Observable<Comentario[]> {
     return this.api.get<Comentario[]>(`/api/publicaciones/${publicacionId}/comentarios`);
   }

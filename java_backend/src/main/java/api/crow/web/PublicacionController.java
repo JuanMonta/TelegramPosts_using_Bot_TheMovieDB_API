@@ -1,12 +1,15 @@
 package api.crow.web;
 
+import api.crow.domain.ColaPublicacion;
 import api.crow.domain.LinkVideo;
 import api.crow.domain.Publicacion;
+import api.crow.repository.ColaPublicacionRepository;
 import api.crow.repository.ComentarioRepository;
 import api.crow.repository.LinkVideoRepository;
 import api.crow.repository.PublicacionRepository;
 import api.crow.repository.TituloRepository;
 import api.crow.config.TelegramProperties;
+import api.crow.service.ColaPublicacionService;
 import api.crow.service.TelegramModoService;
 import api.crow.service.TelegramPublisher;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +32,7 @@ public class PublicacionController {
     private final TituloRepository tituloRepository;
     private final LinkVideoRepository linkVideoRepository;
     private final ComentarioRepository comentarioRepository;
+    private final ColaPublicacionRepository colaRepository;
     private final TelegramPublisher telegram;
     private final TelegramProperties telegramProps;
     private final TelegramModoService telegramModo;
@@ -69,6 +73,14 @@ public class PublicacionController {
                 ? Map.of()
                 : comentarioRepository.conteoPorPublicaciones(pubIds);
 
+        // Próxima hora programada por publicación (items activos de la cola).
+        Map<Long, String> programado = new HashMap<>();
+        for (ColaPublicacion c : colaRepository.findAtivosConPublicacion()) {
+            if (c.getProgramadoPara() != null) {
+                programado.put(c.getPublicacion().getId(), c.getProgramadoPara().toString());
+            }
+        }
+
         int borradores = 0;
         int publicados = 0;
         int sin = 0;
@@ -92,6 +104,7 @@ public class PublicacionController {
             m.put("estado", estado);
             m.put("fecha", fechaMostrable(p, t));
             m.put("comentarios_count", p == null ? 0 : conteoComentarios.getOrDefault(p.getId(), 0L));
+            m.put("programado_para", p == null ? null : programado.get(p.getId()));
             items.add(m);
         }
 
@@ -191,6 +204,23 @@ public class PublicacionController {
         if (p == null) {
             return ResponseEntity.notFound().build();
         }
+        // Idempotencia con la cola: si el post está programado (pendiente o en
+        // pleno envío) o ya salió, no se vuelve a publicar nunca.
+        if (colaRepository.tieneActivo(id)) {
+            return ResponseEntity.badRequest().body(Map.of("error",
+                    "El post está programado en la cola. Cancelá la programación para publicarlo manualmente."));
+        }
+        if ("publicado".equals(p.getEstado())) {
+            return ResponseEntity.badRequest().body(Map.of("error",
+                    "El post ya está publicado. Recargá el estado para ver las acciones del post publicado."));
+        }
+        // Pre-valida el límite de Telegram para fotos (1024) con mensaje claro,
+        // sin gastar la llamada a la API.
+        long longitud = p.getCaption() == null ? 0 : p.getCaption().codePointCount(0, p.getCaption().length());
+        if (longitud > ColaPublicacionService.LIMITE_CAPTION) {
+            return ResponseEntity.badRequest().body(Map.of("error",
+                    ColaPublicacionService.errorCaptionLargo(longitud).replace("Acortaldo en el editor y presioná Reintentar.", "Acortá el caption antes de publicar.")));
+        }
         try {
             List<LinkVideo> links = linkVideoRepository.findByTituloIdOrderByOrdenAsc(p.getTitulo().getId());
             Map<String, Object> resp = telegram.sendPhoto(p, links);
@@ -221,6 +251,34 @@ public class PublicacionController {
             List<LinkVideo> links = linkVideoRepository.findByTituloIdOrderByOrdenAsc(p.getTitulo().getId());
             telegram.editarPost(p, links);
             p.setFechaEditado(LocalDateTime.now());
+            publicacionRepository.save(p);
+            return ResponseEntity.ok(toMap(p));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    /**
+     * Elimina el mensaje del canal y devuelve el registro a borrador
+     * (deshacer la publicación sin perder el caption).
+     */
+    @PostMapping("/{id}/eliminar-del-canal")
+    public ResponseEntity<?> eliminarDelCanal(@PathVariable Long id) {
+        Publicacion p = publicacionRepository.findById(id)
+                .orElse(null);
+        if (p == null) {
+            return ResponseEntity.notFound().build();
+        }
+        if (!"publicado".equals(p.getEstado()) || p.getTelegramMessageId() == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "El post no está publicado en el canal todavía."));
+        }
+        try {
+            telegram.borrarPost(p);
+            p.setEstado("borrador");
+            p.setTelegramMessageId(null);
+            p.setTelegramChatId(null);
+            p.setFechaPublicacion(null);
+            p.setFechaEditado(null);
             publicacionRepository.save(p);
             return ResponseEntity.ok(toMap(p));
         } catch (Exception e) {

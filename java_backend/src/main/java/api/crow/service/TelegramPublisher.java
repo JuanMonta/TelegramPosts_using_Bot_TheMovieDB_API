@@ -68,17 +68,27 @@ public class TelegramPublisher {
     }
 
     /**
-     * Publica el póster + caption + botones de enlaces en el canal.
+     * Publica el póster + caption + botones de enlaces en el canal activo
+     * (según el modo real/prueba actual).
+     */
+    public Map<String, Object> sendPhoto(Publicacion publicacion, List<LinkVideo> links) {
+        return sendPhoto(publicacion, links, modo.canalActivo());
+    }
+
+    /**
+     * Publica el póster + caption + botones de enlaces en un canal explícito.
+     * Lo usa la cola de publicaciones para respetar el modo en que se programó
+     * el post aunque después se cambie el modo desde el frontend.
      * El póster se sube como ARCHIVO (multipart), no como URL: Telegram no tiene
      * que ir a descargarlo del CDN de TMDB, lo que eliminaba cuelgues de 20s+
      * cuando el CDN iba lento (y el consiguiente error de conexión en el frontend).
      * Devuelve el message_id de Telegram y el chat donde se publicó.
      */
-    public Map<String, Object> sendPhoto(Publicacion publicacion, List<LinkVideo> links) {
+    public Map<String, Object> sendPhoto(Publicacion publicacion, List<LinkVideo> links, String canal) {
         Resource foto = posterImagen(publicacion.getTitulo());
 
         MultiValueMap<String, Object> form = new LinkedMultiValueMap<>();
-        form.add("chat_id", modo.canalActivo());
+        form.add("chat_id", canal);
         form.add("photo", foto);
         form.add("caption", captionConLinks(publicacion, links));
         form.add("parse_mode", "HTML");
@@ -127,16 +137,26 @@ public class TelegramPublisher {
         if (publicacion.getTelegramMessageId() != null
                 && publicacion.getTelegramChatId() != null
                 && !publicacion.getTelegramChatId().isBlank()) {
-            Map<String, Object> del = new LinkedHashMap<>();
-            del.put("chat_id", publicacion.getTelegramChatId());
-            del.put("message_id", publicacion.getTelegramMessageId());
             try {
-                llamar("deleteMessage", del, MediaType.APPLICATION_JSON);
+                borrarPost(publicacion);
             } catch (Exception ignore) {
                 // el mensaje ya no existía (borrado manual o el bot perdió acceso): se sigue con el nuevo
             }
         }
         return sendPhoto(publicacion, links);
+    }
+
+    /** Elimina el mensaje del canal usando el message_id/chat_id registrados. */
+    public void borrarPost(Publicacion publicacion) {
+        if (publicacion.getTelegramMessageId() == null
+                || publicacion.getTelegramChatId() == null
+                || publicacion.getTelegramChatId().isBlank()) {
+            throw new IllegalStateException("El post no tiene message_id/chat_id registrados. Debe estar publicado.");
+        }
+        Map<String, Object> del = new LinkedHashMap<>();
+        del.put("chat_id", publicacion.getTelegramChatId());
+        del.put("message_id", publicacion.getTelegramMessageId());
+        llamar("deleteMessage", del, MediaType.APPLICATION_JSON);
     }
 
     // ---- póster como archivo ----

@@ -219,14 +219,62 @@
       <button class="mini-btn" (click)="cancelarRepost()">NO</button>
     </div>
 
+    <div *ngIf="confirmandoEliminar" class="confirmar repost-confirm rise-in">
+      <div class="confirmar-txt">
+        <span>¿Eliminar el post del canal?</span>
+        <span class="nota">Se borra el mensaje y el post vuelve a borrador (conserva el caption para publicarlo cuando quieras).</span>
+      </div>
+      <button class="mini-btn peligro" (click)="eliminarDelCanal()" [disabled]="editando">SÍ, ELIMINAR</button>
+      <button class="mini-btn" (click)="cancelarEliminar()">NO</button>
+    </div>
+
     <div class="compositor-pie">
       <span class="tally tip">El preview es idéntico a lo que verá el canal.</span>
+      <div class="pie-acciones">
+        <button *ngIf="estado === 'borrador' && !colaActiva" class="boton-programar" (click)="abrirProgramacion()" [class.en-curso]="programando" [disabled]="accionCola">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9.5"/><polyline points="12 6.5 12 12 15.5 14.5"/></svg>
+          <span>PROGRAMAR</span>
+        </button>
+        <button *ngIf="estado === 'borrador'" class="boton-publicar" (click)="publicar()" [disabled]="publicando || accionCola || !!colaActiva" [title]="colaActiva ? 'Está programado en la cola: cancelá la programación para publicarlo manualmente' : 'Publicar ahora en el canal'">
+          <svg *ngIf="!publicando" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M9.04 15.6 8.6 19.3c.12 0 .24-.04.33-.13l2.05-1.87 4.25 3.12c.78.43 1.33.21 1.54-.72l2.8-13.14c.25-1.16-.44-1.61-1.23-1.27L2.17 8.47c-1.17.45-1.16 1.11-.2 1.39l4.02 1.25 9.32-5.87c.44-.27.85-.12.52.17l-7.55 6.8-2.24 7.39z"/></svg>
+          <span class="spinner spinner-blanco" *ngIf="publicando"></span>
+          <span>PUBLICAR</span>
+        </button>
+      </div>
+    </div>
 
-      <button *ngIf="estado === 'borrador'" class="boton-publicar" (click)="publicar()" [disabled]="publicando">
-        <svg *ngIf="!publicando" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M9.04 15.6 8.6 19.3c.12 0 .24-.04.33-.13l2.05-1.87 4.25 3.12c.78.43 1.33.21 1.54-.72l2.8-13.14c.25-1.16-.44-1.61-1.23-1.27L2.17 8.47c-1.17.45-1.16 1.11-.2 1.39l4.02 1.25 9.32-5.87c.44-.27.85-.12.52.17l-7.55 6.8-2.24 7.39z"/></svg>
-        <span class="spinner spinner-blanco" *ngIf="publicando"></span>
-        <span>PUBLICAR</span>
-      </button>
+    <!-- programador: fecha/hora de publicación -->
+    <div *ngIf="programando && !colaActiva && estado === 'borrador'" class="programar-capsula rise-in">
+      <div class="programar-tit">
+        <label for="programar-fecha" class="tally">PROGRAMAR PARA</label>
+        <span class="tally dimmed">el bot publicará el borrador solo a esta hora</span>
+      </div>
+      <div class="programar-fila">
+        <input id="programar-fecha" type="datetime-local" class="campo programar-input caret-blue" [(ngModel)]="programarPara" />
+        <button class="mini-btn" (click)="setProgramar(1)">+1h</button>
+        <button class="mini-btn" (click)="setProgramar(0, 21)">hoy 21:00</button>
+        <button class="mini-btn" (click)="setProgramar(24, 21)">mañana 21:00</button>
+      </div>
+      <div class="programar-pie">
+        <button class="mini-btn" (click)="cancelarProgramacion()">CANCELAR</button>
+        <button class="mini-btn accente" (click)="confirmarProgramar()" [disabled]="!programarPara || accionCola">
+          <span *ngIf="!accionCola">AÑADIR A LA COLA</span>
+          <span class="spinner spinner-chico" *ngIf="accionCola"></span>
+        </button>
+      </div>
+    </div>
+
+    <!-- ya programado -->
+    <div *ngIf="colaActiva && estado === 'borrador'" class="programado-barra rise-in">
+      <div class="programado-txt">
+        <span class="programado-ico" aria-hidden="true">⏰</span>
+        <span class="tally">
+          programado para <strong class="mono">{{fmtProgramado(colaActiva.programado_para)}}</strong>
+          <span class="chip chip-formato" [class.modo-test]="colaActiva.modo === 'test'">{{colaActiva.modo === 'test' ? 'PRUEBA' : 'REAL'}}</span>
+          <span class="tally programado-nota">El botón Publicar queda desactivado hasta cancelar la programación.</span>
+        </span>
+      </div>
+      <button class="mini-btn" (click)="cancelarProgramacionActiva()" [disabled]="accionCola">CANCELAR</button>
     </div>
 
     <div *ngIf="estado === 'publicado'" class="acciones-publicacion">
@@ -246,13 +294,16 @@
           <span>AGREGAR UN COMENTARIO</span>
         </button>
       </div>
+      <button class="link-eliminar-canal" (click)="confirmarEliminar()" [disabled]="editando || publicando" title="Borra el mensaje del canal y vuelve a borrador">
+        eliminar del canal
+      </button>
     </div>
   </footer>
   </div>
 
   <!-- diálogo de gestión de plantillas -->
-  <div class="modal-fondo" *ngIf="configurandoPlantillas" (click)="cerrarGestionPlantillas()">
-    <div class="modal-carta modal-ancha" (click)="$event.stopPropagation()">
+  <div class="modal-fondo" *ngIf="configurandoPlantillas">
+    <div class="modal-carta modal-ancha">
       <div class="modal-cab">
         <span class="tally">PLANTILLAS DE CAPTION</span>
         <span class="tally dimmed">Gestioná plantillas y elegí la que usarás por defecto.</span>
