@@ -17,6 +17,8 @@
       {{estado === 'publicado' ? 'PUBLICADO' : 'BORRADOR'}}
     </span>
 
+    <app-modo-toggle class="barra-modo" (modoCambiado)="recargarTrasModo()"></app-modo-toggle>
+
     <button class="ico-btn toggle-disposicion" (click)="alternarDisposicion()" [attr.aria-pressed]="disposicion === 'lado'" [attr.aria-label]="disposicion === 'pila' ? 'Ver editor y preview lado a lado' : 'Ver editor y preview apilados'" [title]="disposicion === 'pila' ? 'Editor y preview lado a lado' : 'Editor y preview apilados (arriba/abajo)'">
       <svg *ngIf="disposicion === 'pila'" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3.5" y="4" width="7" height="16" rx="1.8"/><rect x="13.5" y="4" width="7" height="16" rx="1.8"/></svg>
       <svg *ngIf="disposicion === 'lado'" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4" y="4" width="16" height="6.2" rx="1.8"/><rect x="4" y="13.8" width="16" height="6.2" rx="1.8"/></svg>

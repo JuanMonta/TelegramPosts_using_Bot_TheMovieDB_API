@@ -80,3 +80,7 @@ app:
     channel-id: ${TELEGRAM_CHANNEL_ID:}
     # Grupo de discusión vinculado al canal (ej. "-1001234567890")
     discussion-group-id: ${TELEGRAM_DISCUSSION_GROUP_ID:}
+    # Entorno de pruebas (opcional): canal y grupo propios para ensayar antes de
+    # publicar en el real. Mismo bot; conmutable en runtime desde el frontend.
+    test-channel-id: ${TELEGRAM_TEST_CHANNEL_ID:}
+    test-discussion-group-id: ${TELEGRAM_TEST_DISCUSSION_GROUP_ID:}

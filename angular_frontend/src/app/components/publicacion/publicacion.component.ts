@@ -180,6 +180,11 @@ export class PublicacionComponent implements OnInit, OnDestroy {
     });
   }
 
+  /** Tras cambiar REAL/PRUEBA, vuelve a enlazar esta publicación (la de este modo). */
+  recargarTrasModo(): void {
+    if (this.titulo) this.asegurarBorrador(this.titulo);
+  }
+
   private asegurarBorrador(t: TituloDetalle): void {
     this.publicacionesService.listar().pipe(takeUntil(this.killed)).subscribe({
       next: (pubs) => {
@@ -745,13 +750,13 @@ export class PublicacionComponent implements OnInit, OnDestroy {
     this.confirmandoRepost = false;
   }
 
-  /** Deep link al hilo de comentarios de este post en el grupo de discusión. */
+  /** Deep link al post en el canal (su hilo de comentarios queda a un clic). */
   get linkComentario(): string | null {
     if (!this.publicacion) return null;
-    const grupo = this.publicacion.telegram_grupo_chat_id;
+    const canal = this.publicacion.telegram_chat_id;
     const msg = this.publicacion.telegram_message_id;
-    if (!grupo || !msg) return null;
-    const id = grupo.startsWith('-100') ? grupo.slice(4) : grupo.replace(/^-/, '');
+    if (!canal || !msg) return null;
+    const id = canal.startsWith('-100') ? canal.slice(4) : canal.replace(/^-/, '');
     return `https://t.me/c/${id}/${msg}`;
   }
 

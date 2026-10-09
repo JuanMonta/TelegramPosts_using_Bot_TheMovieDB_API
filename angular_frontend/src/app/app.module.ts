@@ -11,13 +11,15 @@ import { AppComponent } from './app.component';
 import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
 import { HomeComponent } from './components/home/home.component';
 import { PublicacionComponent } from './components/publicacion/publicacion.component';
+import { ModoToggleComponent } from './components/modo-toggle/modo-toggle.component';
 import { AppRouteReuseStrategy } from './app-route-reuse.strategy';
 
 @NgModule({
   declarations: [
     AppComponent,
     HomeComponent,
-    PublicacionComponent
+    PublicacionComponent,
+    ModoToggleComponent
   ],
   imports: [
     BrowserModule,

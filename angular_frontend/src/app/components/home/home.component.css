@@ -33,6 +33,10 @@
   letter-spacing: 0.2px;
 }
 .pane-titulo .tally { display: block; margin-top: 2px; }
+.pane-modo {
+  margin-left: auto;
+  flex: none;
+}
 
 .avatar {
   flex: none;

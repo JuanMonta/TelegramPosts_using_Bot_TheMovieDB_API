@@ -1,0 +1,33 @@
+.modo-grupo {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+}
+
+.modo-boton {
+  padding: 3px 12px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: var(--text-faint);
+  transition: background 130ms ease, color 130ms ease;
+}
+
+.modo-boton.activo {
+  background: var(--action-dim);
+  color: var(--action-hover);
+}
+
+.modo-boton.test.activo {
+  background: rgba(255, 170, 60, 0.18);
+  color: #ffb85c;
+}
+
+.modo-boton.sincfg { opacity: 0.55; }
+
+.modo-boton.deshabilitado { pointer-events: none; }

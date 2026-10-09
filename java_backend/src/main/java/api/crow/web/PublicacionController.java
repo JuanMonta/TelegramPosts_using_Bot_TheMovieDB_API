@@ -7,6 +7,7 @@ import api.crow.repository.LinkVideoRepository;
 import api.crow.repository.PublicacionRepository;
 import api.crow.repository.TituloRepository;
 import api.crow.config.TelegramProperties;
+import api.crow.service.TelegramModoService;
 import api.crow.service.TelegramPublisher;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -30,13 +31,16 @@ public class PublicacionController {
     private final ComentarioRepository comentarioRepository;
     private final TelegramPublisher telegram;
     private final TelegramProperties telegramProps;
+    private final TelegramModoService telegramModo;
 
     record PublicacionRequest(Long tituloId, String caption) {}
 
     @GetMapping
     public List<Map<String, Object>> listar() {
+        String modoActivo = telegramModo.modoActual();
         List<Map<String, Object>> out = new ArrayList<>();
         for (Publicacion p : publicacionRepository.findAll()) {
+            if (!visibleEnModo(p, modoActivo)) continue;
             out.add(toMap(p));
         }
         return out;
@@ -50,8 +54,10 @@ public class PublicacionController {
      */
     @GetMapping("/catalogo")
     public ResponseEntity<?> catalogo() {
+        String modoActivo = telegramModo.modoActual();
         Map<Long, Publicacion> pubPorTitulo = new HashMap<>();
         for (Publicacion p : publicacionRepository.findAllConTitulo()) {
+            if (!visibleEnModo(p, modoActivo)) continue;
             pubPorTitulo.put(p.getTitulo().getId(), p);
         }
 
@@ -112,6 +118,18 @@ public class PublicacionController {
     private String nombreMostrable(TituloRepository.CatalogoFila t) {
         String latino = t.getTituloLatino();
         return latino != null && !latino.isBlank() ? latino : t.getTituloOriginal();
+    }
+
+    /**
+     * Un post es visible en el modo activo si: es borrador (compartido entre
+     * modos, aún no salió a ninguna parte) o está publicado en ese mismo modo.
+     * Así los posts de prueba nunca se ven mezclados con los reales.
+     */
+    private boolean visibleEnModo(Publicacion p, String modoActivo) {
+        if ("publicado".equals(p.getEstado())) {
+            return modoActivo.equals(p.getModo()) || modoActivo.equals(TelegramModoService.MODO_REAL) && (p.getModo() == null || p.getModo().isBlank());
+        }
+        return true;
     }
 
     private String fechaMostrable(Publicacion p, TituloRepository.CatalogoFila t) {
@@ -177,6 +195,7 @@ public class PublicacionController {
             List<LinkVideo> links = linkVideoRepository.findByTituloIdOrderByOrdenAsc(p.getTitulo().getId());
             Map<String, Object> resp = telegram.sendPhoto(p, links);
             p.setEstado("publicado");
+            p.setModo(telegramModo.modoActual());
             p.setTelegramMessageId(((Number) resp.get("message_id")).longValue());
             p.setTelegramChatId(resp.get("chat_id").toString());
             p.setFechaPublicacion(LocalDateTime.now());
@@ -224,6 +243,7 @@ public class PublicacionController {
             List<LinkVideo> links = linkVideoRepository.findByTituloIdOrderByOrdenAsc(p.getTitulo().getId());
             Map<String, Object> resp = telegram.republicar(p, links);
             p.setEstado("publicado");
+            p.setModo(telegramModo.modoActual());
             p.setTelegramMessageId(((Number) resp.get("message_id")).longValue());
             p.setTelegramChatId(resp.get("chat_id").toString());
             p.setFechaPublicacion(LocalDateTime.now());
@@ -244,10 +264,11 @@ public class PublicacionController {
                 : p.getTitulo().getTituloOriginal());
         m.put("caption", p.getCaption());
         m.put("estado", p.getEstado());
+        m.put("modo", p.getModo());
         m.put("telegram_message_id", p.getTelegramMessageId());
         m.put("telegram_chat_id", p.getTelegramChatId());
         m.put("chat_dedicado", Boolean.TRUE);
-        m.put("telegram_grupo_chat_id", telegramProps.discussionGroupId());
+        m.put("telegram_grupo_chat_id", telegramModo.grupoActivo());
         m.put("comentarios_count", comentarioRepository.countByPublicacionId(p.getId()));
         m.put("fecha_publicacion", p.getFechaPublicacion() == null ? null : p.getFechaPublicacion().toString());
         m.put("fecha_editado", p.getFechaEditado() == null ? null : p.getFechaEditado().toString());

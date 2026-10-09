@@ -26,6 +26,9 @@ public class Publicacion {
     @Column(name = "estado", length = 20)
     private String estado;
 
+    @Column(name = "modo", length = 8)
+    private String modo;
+
     @Column(name = "telegram_message_id")
     private Long telegramMessageId;
 

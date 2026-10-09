@@ -8,6 +8,7 @@
         <h1>CANAL DE VIDEOS</h1>
         <span class="tally">{{total}} guardados · {{borradores}} borrador<ng-container *ngIf="borradores !== 1">es</ng-container> · {{publicados}} publ<ng-container *ngIf="publicados !== 1">icados</ng-container><ng-container *ngIf="publicados === 1">icado</ng-container></span>
       </div>
+      <div class="pane-modo"><app-modo-toggle (modoCambiado)="recargarTrasModo()"></app-modo-toggle></div>
     </header>
 
     <div class="busqueda">

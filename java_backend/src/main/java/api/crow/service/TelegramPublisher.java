@@ -36,6 +36,7 @@ public class TelegramPublisher {
 
     private final TelegramProperties telegram;
     private final TmdbProperties tmdb;
+    private final TelegramModoService modo;
 
     private final RestClient restClient = RestClient.builder()
             .baseUrl("https://api.telegram.org")
@@ -77,7 +78,7 @@ public class TelegramPublisher {
         Resource foto = posterImagen(publicacion.getTitulo());
 
         MultiValueMap<String, Object> form = new LinkedMultiValueMap<>();
-        form.add("chat_id", telegram.channelId());
+        form.add("chat_id", modo.canalActivo());
         form.add("photo", foto);
         form.add("caption", captionConLinks(publicacion, links));
         form.add("parse_mode", "HTML");
@@ -228,7 +229,7 @@ public class TelegramPublisher {
     private JsonNode llamar(String metodo, Object body, MediaType contentType) {
         if (telegram.botToken() == null || telegram.botToken().isBlank())
             throw new IllegalStateException("TELEGRAM_BOT_TOKEN no configurado. Pégalo en application-local.yaml en app.telegram.bot-token");
-        if (telegram.channelId() == null || telegram.channelId().isBlank())
+        if (modo.canalActivo() == null || modo.canalActivo().isBlank())
             throw new IllegalStateException("TELEGRAM_CHANNEL_ID no configurado.");
         try {
             String respBody = restClient.post()

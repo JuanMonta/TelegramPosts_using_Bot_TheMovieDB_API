@@ -14,7 +14,10 @@ public interface PublicacionRepository extends JpaRepository<Publicacion, Long> 
     /** Busca una publicación por el message_id de Telegram del canal. */
     Optional<Publicacion> findByTelegramMessageId(Long telegramMessageId);
 
+    /** Busca por canal + message_id: desambigua mensajes entre el canal real y el de pruebas. */
+    Optional<Publicacion> findByTelegramChatIdAndTelegramMessageId(String telegramChatId, Long telegramMessageId);
+
     /** Trae todas las publicaciones con su título (evita N+1 al montar el catálogo). */
-    @Query("SELECT p FROM Publicacion p JOIN FETCH p.titulo")
+    @Query("SELECT p FROM Publicacion p JOIN FETCH p.titulo ORDER BY p.creadoEn DESC")
     List<Publicacion> findAllConTitulo();
 }

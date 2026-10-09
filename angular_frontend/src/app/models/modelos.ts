@@ -60,6 +60,7 @@ export interface Publicacion {
     titulo: string;
     caption: string | null;
     estado: 'borrador' | 'publicado';
+    modo?: 'real' | 'test' | null;
     telegram_message_id: number | null;
     telegram_chat_id?: string | null;
     telegram_grupo_message_id?: number | null;

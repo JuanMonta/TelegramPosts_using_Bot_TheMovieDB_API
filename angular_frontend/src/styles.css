@@ -82,6 +82,38 @@ a:hover { text-decoration: underline; }
 .faint { color: var(--text-faint); }
 .tally { font-family: var(--mono); color: var(--text-dimmed); font-size: 0.85em; letter-spacing: 0.04em; }
 
+/* ============================================================
+   MODO PRUEBA: override del tema completo a una paleta ámbar/tenue
+   para distinguirlo de un vistazo del canal real (azul).
+   ============================================================ */
+body.modo-test {
+  --bg-page: #1a1408;
+  --bg-chat: #241c0e;
+  --bg-elevated: #332917;
+  --bg-elevated-2: #1f1910;
+  --bg-input: rgba(255, 176, 64, 0.10);
+  --bg-active: rgba(255, 176, 64, 0.15);
+  --bg-hover: rgba(255, 220, 160, 0.05);
+  --hairline: rgba(255, 195, 120, 0.12);
+  --hairline-soft: rgba(255, 195, 120, 0.07);
+  --text-primary: #f7efe2;
+  --text-dimmed: rgba(247, 239, 226, 0.62);
+  --text-faint: rgba(247, 239, 226, 0.52);
+  --text-inverse: #1a1408;
+  --action: #f0b43a;
+  --action-hover: #f7cc6e;
+  --action-dim: rgba(240, 180, 58, 0.16);
+  --link: #f0b43a;
+  --danger: #ff8b6b;
+  --danger-dim: rgba(255, 139, 107, 0.14);
+  --ok: #7fd66a;
+  --star: #ffcc66;
+}
+
+body.modo-test ::selection { background: rgba(240, 180, 58, 0.3); color: #fff; }
+body.modo-test .mat-progress-bar-buffer { background-color: rgba(240, 180, 58, 0.22); }
+body.modo-test .mat-progress-bar-fill::after { background-color: var(--action); }
+
 /* hairline chips — el color solo vive en el filo */
 .chip {
   display: inline-flex;

@@ -163,6 +163,13 @@ export class HomeComponent implements OnInit, OnDestroy {
 
   /** Refresca el catálogo conservando el estado de la UI (selección, filtros,
    *  paginación, vista). Se dispara al volver a la ruta desde el editor. */
+  recargarTrasModo(): void {
+    this.filtroEstado = 'todos';
+    this.busquedaCatalogo = '';
+    this.panelComentariosAbierto = false;
+    this.refrescarDatos();
+  }
+
   private refrescarDatos(): void {
     this.publicacionesService.catalogo().pipe(takeUntil(this.killed)).subscribe({
       next: (c) => {

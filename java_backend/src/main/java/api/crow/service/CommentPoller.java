@@ -39,6 +39,7 @@ public class CommentPoller {
     private final ComentarioRepository comentarioRepository;
     private final SettingRepository settingRepository;
     private final TelegramProperties telegramProps;
+    private final TelegramModoService modo;
 
     private Thread hilo;
     private volatile boolean activo;
@@ -46,7 +47,7 @@ public class CommentPoller {
     @PostConstruct
     void arrancar() {
         if (telegramProps.botToken() == null || telegramProps.botToken().isBlank()
-                || telegramProps.discussionGroupId() == null || telegramProps.discussionGroupId().isBlank()) {
+                || modo.grupoActivo() == null || modo.grupoActivo().isBlank()) {
             log.info("CommentPoller: sin bot-token/grupo configurado, polling desactivado.");
             return;
         }
@@ -101,14 +102,15 @@ public class CommentPoller {
         if (message.isMissingNode()) return;
 
         long chatId = message.path("chat").path("id").asLong();
-        Long discussionGroupId = parseLongOrNull(telegramProps.discussionGroupId());
+        Long discussionGroupId = parseLongOrNull(modo.grupoActivo());
         if (discussionGroupId == null || chatId != discussionGroupId) return;
 
         JsonNode replyTo = message.path("reply_to_message");
         if (replyTo.isMissingNode()) return;
 
         long channelMessageId = replyTo.path("message_id").asLong();
-        Optional<Publicacion> pubOpt = publicacionRepository.findByTelegramMessageId(channelMessageId);
+        Optional<Publicacion> pubOpt = publicacionRepository
+                .findByTelegramChatIdAndTelegramMessageId(modo.canalActivo(), channelMessageId);
         if (pubOpt.isEmpty()) return;
 
         long telegramMsgId = message.path("message_id").asLong();

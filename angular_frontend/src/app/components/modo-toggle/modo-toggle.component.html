@@ -1,0 +1,24 @@
+<div class="modo-grupo" role="group" aria-label="Modo de publicación">
+  <button
+    class="modo-boton"
+    [class.activo]="modo === 'real'"
+    [class.deshabilitado]="cambiando"
+    (click)="elegir('real')"
+    [disabled]="cambiando"
+    title="Publicar en el canal real"
+  >
+    REAL
+  </button>
+  <button
+    class="modo-boton"
+    [class.activo]="modo === 'test'"
+    [class.test]="modo === 'test'"
+    [class.sincfg]="!testConfigurado"
+    [class.deshabilitado]="cambiando"
+    (click)="elegir('test')"
+    [disabled]="cambiando"
+    [title]="testConfigurado ? 'Publicar en el canal de pruebas' : 'Canal de pruebas sin configurar'"
+  >
+    PRUEBA
+  </button>
+</div>
