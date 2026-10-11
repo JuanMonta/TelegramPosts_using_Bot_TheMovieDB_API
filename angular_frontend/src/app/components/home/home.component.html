@@ -1,19 +1,30 @@
 <div class="app" [class.con-panel-comentarios]="panelComentariosAbierto">
   <aside class="pane">
     <header class="pane-cab">
-      <div class="avatar avatar-canal" aria-hidden="true">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M9.04 15.6 8.6 19.3c.12 0 .24-.04.33-.13l2.05-1.87 4.25 3.12c.78.43 1.33.21 1.54-.72l2.8-13.14c.25-1.16-.44-1.61-1.23-1.27L2.17 8.47c-1.17.45-1.16 1.11-.2 1.39l4.02 1.25 9.32-5.87c.44-.27.85-.12.52.17l-7.55 6.8-2.24 7.39z"/></svg>
-      </div>
-      <div class="pane-titulo">
+      <div class="cab-fila-titulo">
+        <div class="avatar avatar-canal" aria-hidden="true">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M9.04 15.6 8.6 19.3c.12 0 .24-.04.33-.13l2.05-1.87 4.25 3.12c.78.43 1.33.21 1.54-.72l2.8-13.14c.25-1.16-.44-1.61-1.23-1.27L2.17 8.47c-1.17.45-1.16 1.11-.2 1.39l4.02 1.25 9.32-5.87c.44-.27.85-.12.52.17l-7.55 6.8-2.24 7.39z"/></svg>
+        </div>
         <h1>CANAL DE VIDEOS</h1>
-        <span class="tally">{{total}} guardados · {{borradores}} borrador<ng-container *ngIf="borradores !== 1">es</ng-container> · {{publicados}} publ<ng-container *ngIf="publicados !== 1">icados</ng-container><ng-container *ngIf="publicados === 1">icado</ng-container></span>
       </div>
-      <div class="pane-modo">
-        <button class="cola-btn" (click)="abrirCola()" title="Cola de publicaciones programadas" aria-label="Cola de publicaciones">
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9.5"/><polyline points="12 6.5 12 12 15.5 14.5"/></svg>
-          <span class="cola-btn-cnt" *ngIf="colaPendientes" title="">{{colaPendientes}}</span>
-        </button>
-        <app-modo-toggle (modoCambiado)="recargarTrasModo()"></app-modo-toggle>
+      <div class="cab-der">
+        <div class="pane-modo">
+          <button class="cola-btn" (click)="abrirCola()" title="Cola de publicaciones programadas" aria-label="Cola de publicaciones">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9.5"/><polyline points="12 6.5 12 12 15.5 14.5"/></svg>
+            <span class="cola-btn-cnt" *ngIf="colaPendientes" title="">{{colaPendientes}}</span>
+          </button>
+          <button class="cola-btn cfg-btn" (click)="abrirCfg()" title="Configuración" aria-label="Configuración">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          </button>
+          <app-modo-toggle (modoCambiado)="recargarTrasModo()"></app-modo-toggle>
+        </div>
+        <div class="pane-stats">
+          <span class="stat"><b>{{total}}</b> guardados</span>
+          <span class="stat-sep">·</span>
+          <span class="stat"><b>{{borradores}}</b> borrador<ng-container *ngIf="borradores !== 1">es</ng-container></span>
+          <span class="stat-sep">·</span>
+          <span class="stat"><b>{{publicados}}</b> publicad<ng-container *ngIf="publicados !== 1">os</ng-container><ng-container *ngIf="publicados === 1">o</ng-container></span>
+        </div>
       </div>
     </header>
 
@@ -417,6 +428,160 @@
 
     <div class="modal-pie">
       <button class="enlace" (click)="cerrarCola()">CERRAR</button>
+    </div>
+  </div>
+</div>
+
+<!-- modal: configuración -->
+<div class="modal-fondo" *ngIf="cfgAbierta">
+  <div #cfgCarta class="modal-carta cfg-carta" role="dialog" aria-modal="true" aria-label="Configuración" tabindex="-1" (keyup.escape)="cerrarCfg()">
+    <div class="modal-cab">
+      <span class="tally">CONFIGURACIÓN</span>
+      <span class="tally dimmed">Bot, canales y ritmo de la cola. Los valores se guardan cifrados y se aplican al instante.</span>
+    </div>
+
+    <div *ngIf="cfgCargando" class="cfg-cargando">
+      <span class="spinner"></span>
+      <span class="tally">Cargando configuración…</span>
+    </div>
+
+    <div *ngIf="!cfgCargando && cfgError" class="aviso">
+      <div class="aviso-txt">
+        <strong>No se pudo cargar.</strong>
+        <span>{{cfgError}}</span>
+      </div>
+      <button class="enlace" (click)="abrirCfg()">REINTENTAR</button>
+    </div>
+
+    <fieldset class="cfg-fset" [disabled]="cfgGuardando" *ngIf="!cfgCargando && !cfgError && cfg">
+      <!-- clave maestra inválida: valores ilegibles, se muestra el fallback -->
+      <div *ngIf="cfg.clave_invalida" class="aviso">
+        <div class="aviso-txt">
+          <strong>No se pudo descifrar lo guardado.</strong>
+          <span>No se pudo leer la configuración guardada. Puede que la app se haya abierto desde otra carpeta o que haya un problema con la protección. Se muestran los valores de respaldo: revisalos, reemplazá el token si hace falta y GUARDÁ para guardarlos con la nueva configuración.</span>
+        </div>
+      </div>
+
+      <!-- modo -->
+      <div class="cfg-grupo">
+        <div class="cfg-fila">
+          <span class="tally">MODO DE PUBLICACIÓN</span>
+          <app-modo-toggle (modoCambiado)="modoCambiadoEnCfg()"></app-modo-toggle>
+        </div>
+        <span class="cfg-ayuda">El modo se aplica apenas lo tocás; lo demás, al guardar.</span>
+      </div>
+
+      <!-- telegram -->
+      <div class="cfg-grupo">
+        <span class="tally">TELEGRAM</span>
+
+        <div class="cfg-campo">
+          <span class="cfg-etiqueta" id="cfg-token-et">Token del bot</span>
+          <div class="cfg-token" *ngIf="!cfgTokenEditando">
+            <span class="cfg-token-val" [class.vacio]="!cfg.bot_token_configurado">{{cfg.bot_token_configurado ? cfg.bot_token : 'Sin token configurado'}}</span>
+            <button class="cfg-mini" (click)="reemplazarToken()">REEMPLAZAR</button>
+          </div>
+          <div class="cfg-token" *ngIf="cfgTokenEditando">
+            <input
+              class="cfg-input caret-blue"
+              type="password"
+              [(ngModel)]="cfgToken"
+              placeholder="Pegá el token nuevo"
+              autocomplete="new-password"
+              spellcheck="false"
+              aria-labelledby="cfg-token-et"
+              (keyup.enter)="guardarCfg()"
+            />
+            <button class="cfg-mini" (click)="cancelarToken()">CANCELAR</button>
+          </div>
+          <span class="cfg-error" *ngIf="cfgErrores['bot_token']">{{cfgErrores['bot_token']}}</span>
+        </div>
+
+        <div class="cfg-campo">
+          <label class="cfg-etiqueta" for="cfg-canal-principal">Canal principal (modo real)</label>
+          <input
+            id="cfg-canal-principal"
+            class="cfg-input caret-blue"
+            [(ngModel)]="cfg.canal_principal"
+            placeholder="Sin definir — se usa el valor de respaldo"
+            autocomplete="off"
+            spellcheck="false"
+            (keyup.enter)="guardarCfg()"
+          />
+          <span class="cfg-error" *ngIf="cfgErrores['canal_principal']">{{cfgErrores['canal_principal']}}</span>
+        </div>
+
+        <div class="cfg-campo">
+          <label class="cfg-etiqueta" for="cfg-canal-prueba">Canal de prueba (modo prueba)</label>
+          <input
+            id="cfg-canal-prueba"
+            class="cfg-input caret-blue"
+            [(ngModel)]="cfg.canal_prueba"
+            placeholder="Sin definir — se usa el valor de respaldo"
+            autocomplete="off"
+            spellcheck="false"
+            (keyup.enter)="guardarCfg()"
+          />
+          <span class="cfg-error" *ngIf="cfgErrores['canal_prueba']">{{cfgErrores['canal_prueba']}}</span>
+        </div>
+
+        <span class="cfg-ayuda">Canales: @nombredecanal o id numérico (ej. -1001234567890). Si lo dejás vacío, se usa el valor de respaldo.</span>
+      </div>
+
+      <!-- cola y caption -->
+      <div class="cfg-grupo">
+        <span class="tally">COLA Y CAPTION</span>
+        <div class="cfg-numeros">
+          <div class="cfg-campo">
+            <label class="cfg-etiqueta" for="cfg-limite">Límite del caption (caracteres)</label>
+            <input
+              id="cfg-limite"
+              class="cfg-input caret-blue"
+              type="number"
+              min="1"
+              max="4096"
+              [(ngModel)]="cfg.limite_caption"
+              (keyup.enter)="guardarCfg()"
+            />
+            <span class="cfg-error" *ngIf="cfgErrores['limite_caption']">{{cfgErrores['limite_caption']}}</span>
+          </div>
+          <div class="cfg-campo">
+            <label class="cfg-etiqueta" for="cfg-intervalo">Intervalo de la cola (segundos)</label>
+            <input
+              id="cfg-intervalo"
+              class="cfg-input caret-blue"
+              type="number"
+              min="1"
+              max="3600"
+              step="any"
+              [(ngModel)]="cfgIntervaloSeg"
+              (keyup.enter)="guardarCfg()"
+            />
+            <span class="cfg-error" *ngIf="cfgErrores['intervalo_cola_ms']">{{cfgErrores['intervalo_cola_ms']}}</span>
+          </div>
+          <div class="cfg-campo">
+            <label class="cfg-etiqueta" for="cfg-colgada">Liberar publicaciones trabadas (minutos)</label>
+            <input
+              id="cfg-colgada"
+              class="cfg-input caret-blue"
+              type="number"
+              min="1"
+              max="1440"
+              [(ngModel)]="cfg.colgada_minutos"
+              (keyup.enter)="guardarCfg()"
+            />
+            <span class="cfg-error" *ngIf="cfgErrores['colgada_minutos']">{{cfgErrores['colgada_minutos']}}</span>
+          </div>
+        </div>
+      </div>
+    </fieldset>
+
+    <div class="modal-pie cfg-pie">
+      <button class="enlace" (click)="cerrarCfg()">CERRAR</button>
+      <button *ngIf="cfg && !cfgCargando && !cfgError" class="boton-accion cfg-guardar" (click)="guardarCfg()" [disabled]="cfgGuardando">
+        <span *ngIf="!cfgGuardando">GUARDAR</span>
+        <span class="spinner" *ngIf="cfgGuardando" aria-label="Guardando"></span>
+      </button>
     </div>
   </div>
 </div>

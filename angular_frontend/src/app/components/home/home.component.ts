@@ -9,6 +9,7 @@ import { TmdbService } from '../../services/tmdb.service';
 import { ApiService } from '../../services/api.service';
 import { NavegacionService } from '../../services/navegacion.service';
 import { ColaService } from '../../services/cola.service';
+import { ConfiguracionService, ConfiguracionTelegram } from '../../services/configuracion.service';
 import {
   CatalogoFila,
   ColaItem,
@@ -75,6 +76,9 @@ export class HomeComponent implements OnInit, OnDestroy {
   @ViewChild('paneCuerpo') paneCuerpo!: ElementRef<HTMLElement>;
   scrollLista = 0;
 
+  // diálogo de configuración (para moverle el foco al abrir)
+  @ViewChild('cfgCarta') cfgCarta!: ElementRef<HTMLDivElement>;
+
   // búsqueda TMDB para agregar
   busqueda = '';
   buscando = false;
@@ -106,6 +110,19 @@ export class HomeComponent implements OnInit, OnDestroy {
   colaAccion = false;
   private colaTimer: number | undefined;
 
+  // configuración (modal)
+  cfgAbierta = false;
+  cfg: ConfiguracionTelegram | null = null;
+  cfgCargando = false;
+  cfgError: string | null = null;
+  cfgGuardando = false;
+  cfgErrores: Record<string, string> = {};
+  /** Token nuevo en curso; vacío = conservar el actual. */
+  cfgToken = '';
+  cfgTokenEditando = false;
+  /** Intervalo en segundos (la API lo recibe en ms). */
+  cfgIntervaloSeg: number | null = null;
+
   constructor(
     private publicacionesService: PublicacionesService,
     private tmdbService: TmdbService,
@@ -113,7 +130,8 @@ export class HomeComponent implements OnInit, OnDestroy {
     private snack: MatSnackBar,
     private router: Router,
     private navegacion: NavegacionService,
-    private colaService: ColaService
+    private colaService: ColaService,
+    private configSvc: ConfiguracionService
   ) {}
 
   ngOnInit(): void {
@@ -520,6 +538,116 @@ export class HomeComponent implements OnInit, OnDestroy {
     this.colaService.listar().pipe(takeUntil(this.killed)).subscribe({
       next: (items) => (this.colaItems = items.sort((a, b) => (a.programado_para ?? '').localeCompare(b.programado_para ?? ''))),
       error: () => undefined
+    });
+  }
+
+  // ---- configuración (modal) ----
+
+  abrirCfg(): void {
+    this.cfgAbierta = true;
+    this.cfgErrores = {};
+    this.cfgToken = '';
+    this.cfgTokenEditando = false;
+    this.cfgError = null;
+    this.cfgCargando = true;
+    // el foco entra al diálogo para que Escape y el teclado funcionen de entrada
+    setTimeout(() => this.cfgCarta?.nativeElement.focus(), 0);
+    this.configSvc.obtener().pipe(takeUntil(this.killed)).subscribe({
+      next: (c) => {
+        this.cfg = c;
+        this.cfgIntervaloSeg = c.intervalo_cola_ms / 1000;
+        this.cfgCargando = false;
+        this.configSvc.aplicar(c);
+      },
+      error: (e: HttpErrorResponse) => {
+        this.cfgCargando = false;
+        this.cfgError = this.api.mensajeDeError(e);
+      }
+    });
+  }
+
+  cerrarCfg(): void {
+    this.cfgAbierta = false;
+  }
+
+  reemplazarToken(): void {
+    this.cfgTokenEditando = true;
+    this.cfgToken = '';
+    delete this.cfgErrores['bot_token'];
+  }
+
+  cancelarToken(): void {
+    this.cfgTokenEditando = false;
+    this.cfgToken = '';
+    delete this.cfgErrores['bot_token'];
+  }
+
+  /** El modo se aplica al instante (igual que el toggle del header). */
+  modoCambiadoEnCfg(): void {
+    this.recargarTrasModo();
+    this.configSvc.cargar();
+  }
+
+  guardarCfg(): void {
+    if (!this.cfg || this.cfgGuardando || this.cfgCargando) return;
+    const cfg = this.cfg;
+    const errores: Record<string, string> = {};
+
+    if (this.cfgTokenEditando) {
+      const t = this.cfgToken.trim();
+      if (!t) errores['bot_token'] = 'Pegá un token o cancelá el reemplazo.';
+      else if (t.length > 512) errores['bot_token'] = 'El token es demasiado largo (máx. 512).';
+    }
+
+    const canalValido = (v: string | null): boolean => {
+      const s = (v ?? '').trim();
+      return s === '' || s.startsWith('@') || /^-?\d{5,25}$/.test(s);
+    };
+    if (!canalValido(cfg.canal_principal)) {
+      errores['canal_principal'] = 'El canal principal debe ser @nombredecanal o un id numérico (ej. -1001234567890).';
+    }
+    if (!canalValido(cfg.canal_prueba)) {
+      errores['canal_prueba'] = 'El canal de prueba debe ser @nombredecanal o un id numérico (ej. -1001234567890).';
+    }
+
+    const limite = Number(cfg.limite_caption);
+    if (!Number.isInteger(limite) || limite < 1 || limite > 4096) {
+      errores['limite_caption'] = 'El límite del caption debe estar entre 1 y 4096.';
+    }
+    const seg = Number(this.cfgIntervaloSeg);
+    if (!Number.isFinite(seg) || seg < 1 || seg > 3600) {
+      errores['intervalo_cola_ms'] = 'El intervalo de la cola debe estar entre 1s y 60min.';
+    }
+    const colgada = Number(cfg.colgada_minutos);
+    if (!Number.isInteger(colgada) || colgada < 1 || colgada > 1440) {
+      errores['colgada_minutos'] = 'Los minutos para liberar items colgados deben estar entre 1 y 1440.';
+    }
+
+    this.cfgErrores = errores;
+    if (Object.keys(errores).length) return;
+
+    this.cfgGuardando = true;
+    this.configSvc.guardar({
+      bot_token: this.cfgTokenEditando ? this.cfgToken.trim() : null,
+      canal_principal: (cfg.canal_principal ?? '').trim(),
+      canal_prueba: (cfg.canal_prueba ?? '').trim(),
+      limite_caption: limite,
+      intervalo_cola_ms: Math.round(seg * 1000),
+      colgada_minutos: colgada
+    }).pipe(takeUntil(this.killed)).subscribe({
+      next: (c) => {
+        this.cfgGuardando = false;
+        this.cfg = c;
+        this.cfgIntervaloSeg = c.intervalo_cola_ms / 1000;
+        this.cfgTokenEditando = false;
+        this.cfgToken = '';
+        this.configSvc.aplicar(c);
+        this.snack.open('Configuración guardada', '✓', { duration: 2500 });
+      },
+      error: (e: HttpErrorResponse) => {
+        this.cfgGuardando = false;
+        this.snack.open(this.api.mensajeDeError(e), 'OK', { duration: 6000 });
+      }
     });
   }
 

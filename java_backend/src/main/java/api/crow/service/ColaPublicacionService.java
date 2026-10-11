@@ -1,6 +1,5 @@
 package api.crow.service;
 
-import api.crow.config.TelegramProperties;
 import api.crow.domain.ColaPublicacion;
 import api.crow.domain.LinkVideo;
 import api.crow.domain.Publicacion;
@@ -35,30 +34,29 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class ColaPublicacionService implements ApplicationRunner {
 
-    private static final long INTERVALO_MS = 30_000;
+    /** Tick fijo de despertador: cada segundo chequea si ya venció el intervalo
+     * configurado (config_app), lo que permite cambiarlo en caliente. */
+    private static final long TICK_MS = 1_000;
 
     private final ColaPublicacionRepository cola;
     private final PublicacionRepository publicaciones;
     private final LinkVideoRepository links;
     private final TelegramPublisher telegram;
     private final TelegramModoService modo;
-    private final TelegramProperties props;
+    private final ConfigService config;
     private final PlatformTransactionManager txManager;
 
-    /** Marca como 'publicando' los items de más de 5 minutos (crash a mitad de envío). */
-    private static final int COLGADA_MIN = 5;
+    /** Última vez que corrió el barrido (este proceso). */
+    private volatile long ultimoProceso;
 
-    /** Límite de Telegram para el caption de una foto (1024 caracteres). */
-    public static final int LIMITE_CAPTION = 1024;
-
-    public static String errorCaptionLargo(long n) {
-        return "El caption tiene " + n + " caracteres; Telegram permite máx. " + LIMITE_CAPTION
+    public static String errorCaptionLargo(long n, long limite) {
+        return "El caption tiene " + n + " caracteres; Telegram permite máx. " + limite
                 + " en fotos. Acortaldo en el editor y presioná Reintentar.";
     }
 
-    /** Periodo fijo en ms del barrido. También corre al arrancar (ApplicationRunner). */
+    /** Intervalo efectivo hoy (configurable desde Configuración). */
     public long intervaloMs() {
-        return INTERVALO_MS;
+        return config.intervaloColaMs();
     }
 
     @Override
@@ -69,12 +67,17 @@ public class ColaPublicacionService implements ApplicationRunner {
         procesar();
     }
 
-    @Scheduled(fixedDelay = INTERVALO_MS)
+    @Scheduled(fixedDelay = TICK_MS)
     public void procesar() {
+        long ahora = System.currentTimeMillis();
+        if (ahora - ultimoProceso < config.intervaloColaMs()) {
+            return; // aún no vence el intervalo configurado
+        }
+        ultimoProceso = ahora;
         try {
             TransactionTemplate tx = tx();
             tx.execute(status -> {
-                cola.liberarColgadas(LocalDateTime.now().minusMinutes(COLGADA_MIN));
+                cola.liberarColgadas(LocalDateTime.now().minusMinutes(config.colgadaMinutos()));
                 return null;
             });
             List<ColaPublicacion> debidas = cola.findDebidas(ColaPublicacion.ESTADO_PENDIENTE, LocalDateTime.now());
@@ -109,10 +112,11 @@ public class ColaPublicacionService implements ApplicationRunner {
         if (cola.tieneActivo(publicacionId)) {
             throw new IllegalArgumentException("Ese borrador ya está programado en la cola.");
         }
+        long limite = config.limiteCaption();
         long longitud = p.getCaption() == null ? 0 : p.getCaption().codePointCount(0, p.getCaption().length());
-        if (longitud > LIMITE_CAPTION) {
+        if (longitud > limite) {
             throw new IllegalArgumentException("El caption supera el límite de Telegram (" + longitud + " caracteres > "
-                    + LIMITE_CAPTION + "). Acórtalo en el editor antes de programarlo.");
+                    + limite + "). Acórtalo en el editor antes de programarlo.");
         }
         ColaPublicacion item = new ColaPublicacion();
         item.setPublicacion(p);
@@ -141,11 +145,12 @@ public class ColaPublicacionService implements ApplicationRunner {
         if (!ColaPublicacion.ESTADO_PENDIENTE.equals(item.getEstado())) {
             throw new IllegalArgumentException("Solo se puede reprogramar un item pendiente.");
         }
+        long limite = config.limiteCaption();
         long longitud = item.getPublicacion().getCaption() == null ? 0
                 : item.getPublicacion().getCaption().codePointCount(0, item.getPublicacion().getCaption().length());
-        if (longitud > LIMITE_CAPTION) {
+        if (longitud > limite) {
             throw new IllegalArgumentException("El caption supera el límite de Telegram (" + longitud + " caracteres > "
-                    + LIMITE_CAPTION + "). Acórtalo antes de reprogramarlo.");
+                    + limite + "). Acórtalo antes de reprogramarlo.");
         }
         item.setProgramadoPara(programadoPara);
         return toMap(cola.save(item));
@@ -163,10 +168,11 @@ public class ColaPublicacionService implements ApplicationRunner {
         if (!"borrador".equals(p.getEstado())) {
             throw new IllegalArgumentException("El post ya no es un borrador; no puede reprogramarse.");
         }
+        long limite = config.limiteCaption();
         long longitud = p.getCaption() == null ? 0 : p.getCaption().codePointCount(0, p.getCaption().length());
-        if (longitud > LIMITE_CAPTION) {
+        if (longitud > limite) {
             throw new IllegalArgumentException("El caption sigue superando el límite de Telegram (" + longitud + " > "
-                    + LIMITE_CAPTION + "). Acórtalo en el editor antes de reintentar.");
+                    + limite + "). Acórtalo en el editor antes de reintentar.");
         }
         item.setEstado(ColaPublicacion.ESTADO_PENDIENTE);
         item.setError(null);
@@ -197,14 +203,15 @@ public class ColaPublicacionService implements ApplicationRunner {
                 return;
             }
 
+            long limite = config.limiteCaption();
             long longitud = p.getCaption() == null ? 0 : p.getCaption().codePointCount(0, p.getCaption().length());
-            if (longitud > LIMITE_CAPTION) {
+            if (longitud > limite) {
                 // Fallo sin gastar la llamada a Telegram: el caption no cabe en una foto.
                 tx().executeWithoutResult(status -> {
                     ColaPublicacion c = cola.findById(item.getId()).orElse(null);
                     if (c == null) return;
                     c.setEstado(ColaPublicacion.ESTADO_FALLO);
-                    c.setError(errorCaptionLargo(longitud));
+                    c.setError(errorCaptionLargo(longitud, limite));
                     c.setUltimoIntento(LocalDateTime.now());
                     cola.save(c);
                 });
@@ -213,7 +220,7 @@ public class ColaPublicacionService implements ApplicationRunner {
             }
 
             List<LinkVideo> enlaces = links.findByTituloIdOrderByOrdenAsc(p.getTitulo().getId());
-            String canal = canalDe(item.getModo());
+            String canal = modo.canalDeModo(item.getModo());
             Map<String, Object> resp = telegram.sendPhoto(p, enlaces, canal);
 
             tx().executeWithoutResult(status -> {
@@ -246,13 +253,6 @@ public class ColaPublicacionService implements ApplicationRunner {
                 cola.save(c);
             });
         }
-    }
-
-    private String canalDe(String modoItem) {
-        if (TelegramModoService.MODO_TEST.equals(modoItem) && props.tieneTest()) {
-            return props.testChannelId();
-        }
-        return props.channelId();
     }
 
     private TransactionTemplate tx() {

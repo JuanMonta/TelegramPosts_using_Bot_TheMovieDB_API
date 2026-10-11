@@ -10,6 +10,7 @@ import api.crow.repository.PublicacionRepository;
 import api.crow.repository.TituloRepository;
 import api.crow.config.TelegramProperties;
 import api.crow.service.ColaPublicacionService;
+import api.crow.service.ConfigService;
 import api.crow.service.TelegramModoService;
 import api.crow.service.TelegramPublisher;
 import lombok.RequiredArgsConstructor;
@@ -36,6 +37,7 @@ public class PublicacionController {
     private final TelegramPublisher telegram;
     private final TelegramProperties telegramProps;
     private final TelegramModoService telegramModo;
+    private final ConfigService config;
 
     record PublicacionRequest(Long tituloId, String caption) {}
 
@@ -214,12 +216,13 @@ public class PublicacionController {
             return ResponseEntity.badRequest().body(Map.of("error",
                     "El post ya está publicado. Recargá el estado para ver las acciones del post publicado."));
         }
-        // Pre-valida el límite de Telegram para fotos (1024) con mensaje claro,
+        // Pre-valida el límite de Telegram para fotos con mensaje claro,
         // sin gastar la llamada a la API.
+        long limite = config.limiteCaption();
         long longitud = p.getCaption() == null ? 0 : p.getCaption().codePointCount(0, p.getCaption().length());
-        if (longitud > ColaPublicacionService.LIMITE_CAPTION) {
+        if (longitud > limite) {
             return ResponseEntity.badRequest().body(Map.of("error",
-                    ColaPublicacionService.errorCaptionLargo(longitud).replace("Acortaldo en el editor y presioná Reintentar.", "Acortá el caption antes de publicar.")));
+                    ColaPublicacionService.errorCaptionLargo(longitud, limite).replace("Acortaldo en el editor y presioná Reintentar.", "Acortá el caption antes de publicar.")));
         }
         try {
             List<LinkVideo> links = linkVideoRepository.findByTituloIdOrderByOrdenAsc(p.getTitulo().getId());

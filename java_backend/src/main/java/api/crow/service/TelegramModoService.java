@@ -25,6 +25,7 @@ public class TelegramModoService {
 
     private final SettingRepository settings;
     private final TelegramProperties props;
+    private final ConfigService config;
 
     public String modoActual() {
         Optional<Setting> s = settings.findById(CLAVE);
@@ -38,8 +39,21 @@ public class TelegramModoService {
 
     /** Canal activo según el modo (real por defecto). */
     public String canalActivo() {
-        if (modoTest() && props.tieneTest()) return props.testChannelId();
-        return props.channelId();
+        return canalDeModo(modoActual());
+    }
+
+    /**
+     * Canal para un modo puntual: primero lo que dice la configuración cifrada
+     * (editable desde la UI) y, si está vacío, el del yaml. La cola usa esto para
+     * respetar el modo con que se programó cada item.
+     */
+    public String canalDeModo(String modoItem) {
+        if (MODO_TEST.equals(modoItem)) {
+            String prueba = config.canalPrueba();
+            if (prueba != null && !prueba.isBlank()) return prueba;
+            if (props.tieneTest()) return props.testChannelId();
+        }
+        return config.canalPrincipal();
     }
 
     /** Grupo de discusión activo según el modo. */

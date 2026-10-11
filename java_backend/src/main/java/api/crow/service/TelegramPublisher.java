@@ -1,6 +1,5 @@
 package api.crow.service;
 
-import api.crow.config.TelegramProperties;
 import api.crow.config.TmdbProperties;
 import api.crow.domain.LinkVideo;
 import api.crow.domain.Publicacion;
@@ -34,9 +33,9 @@ public class TelegramPublisher {
     /** Long-poll de getUpdates: puede bloquear hasta 50s server-side, el read timeout lo cubre holgado. */
     private static final Duration LECTURA_POLL_TIMEOUT = Duration.ofSeconds(70);
 
-    private final TelegramProperties telegram;
     private final TmdbProperties tmdb;
     private final TelegramModoService modo;
+    private final ConfigService config;
 
     private final RestClient restClient = RestClient.builder()
             .baseUrl("https://api.telegram.org")
@@ -247,13 +246,14 @@ public class TelegramPublisher {
 
     /** Llama a la Bot API con el body indicado (JSON o multipart según content-type). */
     private JsonNode llamar(String metodo, Object body, MediaType contentType) {
-        if (telegram.botToken() == null || telegram.botToken().isBlank())
-            throw new IllegalStateException("TELEGRAM_BOT_TOKEN no configurado. Pégalo en application-local.yaml en app.telegram.bot-token");
+        String token = config.tokenBot();
+        if (token == null || token.isBlank())
+            throw new IllegalStateException("El token del bot no está configurado. Cargalo en Configuración (o en TELEGRAM_BOT_TOKEN).");
         if (modo.canalActivo() == null || modo.canalActivo().isBlank())
-            throw new IllegalStateException("TELEGRAM_CHANNEL_ID no configurado.");
+            throw new IllegalStateException("El canal de publicación no está configurado. Cargalo en Configuración (o TELEGRAM_CHANNEL_ID).");
         try {
             String respBody = restClient.post()
-                    .uri("/bot" + telegram.botToken() + "/" + metodo)
+                    .uri("/bot" + token + "/" + metodo)
                     .contentType(contentType)
                     .body(body)
                     .retrieve()
@@ -285,11 +285,12 @@ public class TelegramPublisher {
      * Usa pollClient porque el read timeout debe cubrir el bloqueo del long-poll.
      */
     public JsonNode getUpdates(long offset, int timeout) {
-        if (telegram.botToken() == null || telegram.botToken().isBlank()) {
-            throw new IllegalStateException("TELEGRAM_BOT_TOKEN no configurado.");
+        String token = config.tokenBot();
+        if (token == null || token.isBlank()) {
+            throw new IllegalStateException("El token del bot no está configurado. Cargalo en Configuración.");
         }
         try {
-            String uri = "/bot" + telegram.botToken() + "/getUpdates?offset=" + offset
+            String uri = "/bot" + token + "/getUpdates?offset=" + offset
                     + "&timeout=" + timeout
                     + "&allowed_updates=[\"message\"]";
             String respBody = pollClient.get()
