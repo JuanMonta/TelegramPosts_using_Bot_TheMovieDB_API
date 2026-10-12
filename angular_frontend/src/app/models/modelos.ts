@@ -61,6 +61,7 @@ export interface Publicacion {
     caption: string | null;
     estado: 'borrador' | 'publicado';
     modo?: 'real' | 'test' | null;
+    acoplamiento_id?: number | null;
     telegram_message_id: number | null;
     telegram_chat_id?: string | null;
     telegram_grupo_message_id?: number | null;
@@ -112,10 +113,61 @@ export interface ColaItem {
   programado_para: string | null;
   estado: 'pendiente' | 'publicando' | 'publicado' | 'fallo' | 'cancelado';
   modo?: 'real' | 'test' | null;
+  acoplamiento_id?: number | null;
+  acoplamiento?: string | null;
   error?: string | null;
   publicado_en?: string | null;
   telegram_message_id?: number | null;
   creado_en?: string | null;
+}
+
+export interface Bot {
+  id: number;
+  nombre: string;
+  token: string | null;
+  token_configurado: boolean;
+  telegram_id?: number | null;
+  username?: string | null;
+  activo: boolean;
+}
+
+export interface Canal {
+  id: number;
+  nombre: string;
+  chat_id: string;
+  tipo: 'real' | 'test';
+  bot_id?: number | null;
+  chat_tipo?: string | null;
+  chat_etiqueta?: string | null;
+  activo: boolean;
+}
+
+export interface AdminBotDetectado {
+  id: number;
+  nombre: string;
+  username: string;
+  estado: string;
+  registrado?: boolean;
+  bot_id?: number | null;
+  bot_nombre?: string | null;
+}
+
+export interface DeteccionChat {
+  type: string;
+  chat_tipo: string | null;
+  etiqueta: string;
+  title: string;
+  username: string;
+  id: number;
+  admin_bots?: AdminBotDetectado[];
+  admin_error?: string | null;
+}
+
+export interface Acoplamiento {
+  id: number;
+  nombre: string;
+  activo: boolean;
+  canales: Canal[];
 }
 
 export function nombreMostrable(t: { titulo_latino: string | null; titulo_original: string }): string {

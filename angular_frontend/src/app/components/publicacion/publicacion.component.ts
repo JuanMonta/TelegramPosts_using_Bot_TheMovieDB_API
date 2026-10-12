@@ -11,7 +11,9 @@ import { CaptionTemplateService, CaptionTemplate } from '../../services/caption-
 import { ColaService } from '../../services/cola.service';
 import { ApiService } from '../../services/api.service';
 import { NavegacionService } from '../../services/navegacion.service';
+import { AcoplamientoService } from '../../services/acoplamiento.service';
 import {
+  Acoplamiento,
   ColaItem,
   LinkVideo,
   Publicacion,
@@ -78,6 +80,10 @@ confirmandoRepost = false;
   programarPara = '';
   accionCola = false;
 
+  // acoplamientos
+  acoplamientos: Acoplamiento[] = [];
+  acoplamientoSeleccionado: number | null = null;
+
   idCopiado = false;
   private copiarTimer: number | undefined;
   private colaPollTimer: number | undefined;
@@ -126,7 +132,8 @@ confirmandoRepost = false;
     private colaService: ColaService,
     private api: ApiService,
     private snack: MatSnackBar,
-    private navegacion: NavegacionService
+    private navegacion: NavegacionService,
+    private acoplamientoSvc: AcoplamientoService
   ) {
     try {
       this.disposicion = localStorage.getItem('disposicion') === 'lado' ? 'lado' : 'pila';
@@ -155,6 +162,10 @@ confirmandoRepost = false;
       }
       this.id = nid;
       this.cargar();
+    });
+    this.acoplamientoSvc.listar().pipe(takeUntil(this.killed)).subscribe({
+      next: (a) => this.acoplamientos = a,
+      error: () => undefined
     });
   }
 
@@ -700,7 +711,7 @@ confirmandoRepost = false;
     await this.forzarGuardado();
     const p = this.publicacion;
     if (!p) { this.publicando = false; return; }
-    this.publicacionesService.publicar(p.id).pipe(takeUntil(this.killed)).subscribe({
+    this.publicacionesService.publicar(p.id, this.acoplamientoSeleccionado).pipe(takeUntil(this.killed)).subscribe({
       next: (listo) => {
         this.publicacion = listo;
         this.estado = listo.estado;

@@ -3,11 +3,14 @@ package api.crow.web;
 import api.crow.domain.ColaPublicacion;
 import api.crow.domain.LinkVideo;
 import api.crow.domain.Publicacion;
+import api.crow.domain.Canal;
 import api.crow.repository.ColaPublicacionRepository;
 import api.crow.repository.ComentarioRepository;
 import api.crow.repository.LinkVideoRepository;
 import api.crow.repository.PublicacionRepository;
 import api.crow.repository.TituloRepository;
+import api.crow.repository.AcoplamientoRepository;
+import api.crow.repository.CanalRepository;
 import api.crow.config.TelegramProperties;
 import api.crow.service.ColaPublicacionService;
 import api.crow.service.ConfigService;
@@ -38,6 +41,8 @@ public class PublicacionController {
     private final TelegramProperties telegramProps;
     private final TelegramModoService telegramModo;
     private final ConfigService config;
+    private final AcoplamientoRepository acoplamientoRepository;
+    private final CanalRepository canalRepository;
 
     record PublicacionRequest(Long tituloId, String caption) {}
 
@@ -200,14 +205,14 @@ public class PublicacionController {
 
     /** Envía el borrador al canal de Telegram y lo marca como publicado. */
     @PostMapping("/{id}/publicar")
-    public ResponseEntity<?> publicar(@PathVariable Long id) {
+    public ResponseEntity<?> publicar(@PathVariable Long id, @RequestBody(required = false) Map<String, Object> body) {
+        Long acoplamientoId = body != null && body.get("acoplamientoId") != null
+                ? Long.valueOf(body.get("acoplamientoId").toString()) : null;
         Publicacion p = publicacionRepository.findById(id)
                 .orElse(null);
         if (p == null) {
             return ResponseEntity.notFound().build();
         }
-        // Idempotencia con la cola: si el post está programado (pendiente o en
-        // pleno envío) o ya salió, no se vuelve a publicar nunca.
         if (colaRepository.tieneActivo(id)) {
             return ResponseEntity.badRequest().body(Map.of("error",
                     "El post está programado en la cola. Cancelá la programación para publicarlo manualmente."));
@@ -216,8 +221,6 @@ public class PublicacionController {
             return ResponseEntity.badRequest().body(Map.of("error",
                     "El post ya está publicado. Recargá el estado para ver las acciones del post publicado."));
         }
-        // Pre-valida el límite de Telegram para fotos con mensaje claro,
-        // sin gastar la llamada a la API.
         long limite = config.limiteCaption();
         long longitud = p.getCaption() == null ? 0 : p.getCaption().codePointCount(0, p.getCaption().length());
         if (longitud > limite) {
@@ -226,9 +229,22 @@ public class PublicacionController {
         }
         try {
             List<LinkVideo> links = linkVideoRepository.findByTituloIdOrderByOrdenAsc(p.getTitulo().getId());
-            Map<String, Object> resp = telegram.sendPhoto(p, links);
+            List<String> canales = acoplamientoId != null
+                    ? canalRepository.findAllById(acoplamientoRepository.findConCanalesById(acoplamientoId)
+                            .map(a -> a.getCanales().stream().map(c -> c.getId()).toList())
+                            .orElse(List.of()))
+                            .stream().filter(c -> Boolean.TRUE.equals(c.getActivo())).map(Canal::getChatId).toList()
+                    : List.of(telegramModo.canalActivo());
+            if (canales.isEmpty()) {
+                return ResponseEntity.badRequest().body(Map.of("error", "No hay canales de destino configurados."));
+            }
+            Map<String, Object> resp = null;
+            for (String canal : canales) {
+                resp = telegram.sendPhoto(p, links, canal);
+            }
             p.setEstado("publicado");
             p.setModo(telegramModo.modoActual());
+            p.setAcoplamientoId(acoplamientoId);
             p.setTelegramMessageId(((Number) resp.get("message_id")).longValue());
             p.setTelegramChatId(resp.get("chat_id").toString());
             p.setFechaPublicacion(LocalDateTime.now());
@@ -326,6 +342,7 @@ public class PublicacionController {
         m.put("caption", p.getCaption());
         m.put("estado", p.getEstado());
         m.put("modo", p.getModo());
+        m.put("acoplamiento_id", p.getAcoplamientoId());
         m.put("telegram_message_id", p.getTelegramMessageId());
         m.put("telegram_chat_id", p.getTelegramChatId());
         m.put("chat_dedicado", Boolean.TRUE);

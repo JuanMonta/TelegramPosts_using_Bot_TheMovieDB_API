@@ -391,6 +391,10 @@
         <option [ngValue]="0" disabled>Elegí un borrador…</option>
         <option *ngFor="let t of colaBorradores()" [ngValue]="t.publicacion_id">{{t.titulo}}</option>
       </select>
+      <select class="cola-select" [(ngModel)]="colaNuevoAcoplamiento" title="Elegí un acoplamiento">
+        <option [ngValue]="null">Sin acoplamiento (canal por defecto)</option>
+        <option *ngFor="let a of acoplamientos" [ngValue]="a.id">{{a.nombre}}</option>
+      </select>
       <input type="datetime-local" class="cola-input" [(ngModel)]="colaNuevaFecha" title="Fecha y hora de publicación" />
       <button class="boton-accion cola-alta-btn" (click)="programarNuevo()" [disabled]="!colaNuevoId || !colaNuevaFecha || colaAccion">
         <span *ngIf="!colaAccion">AÑADIR</span>
@@ -409,6 +413,7 @@
           <span class="tally">
             <span class="cola-ico" aria-hidden="true">⏰</span> {{fmtColaFecha(i.programado_para)}}
             <span class="chip cola-modo" [class.cola-modo-test]="i.modo === 'test'">{{i.modo === 'test' ? 'PRUEBA' : 'REAL'}}</span>
+            <span class="chip" *ngIf="i.acoplamiento">{{i.acoplamiento}}</span>
           </span>
           <span *ngIf="i.estado === 'publicado' && i.publicado_en" class="tally cola-publicado">publicado {{fmtColaFecha(i.publicado_en)}}</span>
           <span *ngIf="i.estado === 'fallo' && i.error" class="cola-error">{{i.error}}</span>
@@ -434,10 +439,15 @@
 
 <!-- modal: configuración -->
 <div class="modal-fondo" *ngIf="cfgAbierta">
-  <div #cfgCarta class="modal-carta cfg-carta" role="dialog" aria-modal="true" aria-label="Configuración" tabindex="-1" (keyup.escape)="cerrarCfg()">
-    <div class="modal-cab">
-      <span class="tally">CONFIGURACIÓN</span>
-      <span class="tally dimmed">Bot, canales y ritmo de la cola. Los valores se guardan cifrados y se aplican al instante.</span>
+  <div #cfgCarta class="modal-carta cfg-carta cfg-nueva" role="dialog" aria-modal="true" aria-label="Configuración" tabindex="-1" (keyup.escape)="cerrarCfg()">
+    <div class="modal-cab cfg-cab-nueva">
+      <div class="cfg-cab-txt">
+        <span class="cfg-titulo">Configuración</span>
+        <span class="tally dimmed">Conecta tu bot, elige dónde publicar y ajusta el ritmo. Todo se guarda cifrado en tu PC.</span>
+      </div>
+      <button class="pc-cerrar" (click)="cerrarCfg()" aria-label="Cerrar configuración" title="Cerrar">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
+      </button>
     </div>
 
     <div *ngIf="cfgCargando" class="cfg-cargando">
@@ -458,82 +468,338 @@
       <div *ngIf="cfg.clave_invalida" class="aviso">
         <div class="aviso-txt">
           <strong>No se pudo descifrar lo guardado.</strong>
-          <span>No se pudo leer la configuración guardada. Puede que la app se haya abierto desde otra carpeta o que haya un problema con la protección. Se muestran los valores de respaldo: revisalos, reemplazá el token si hace falta y GUARDÁ para guardarlos con la nueva configuración.</span>
+          <span>No se pudo leer la configuración guardada. Puede que la app se haya abierto desde otra carpeta o que haya un problema con la protección. Revisa cada pestaña y presiona GUARDAR para guardarlos con la nueva configuración.</span>
         </div>
       </div>
 
-      <!-- modo -->
-      <div class="cfg-grupo">
-        <div class="cfg-fila">
-          <span class="tally">MODO DE PUBLICACIÓN</span>
+      <!-- pestañas -->
+      <nav class="cfg-tabs" role="tablist" aria-label="Secciones de configuración">
+        <button class="cfg-tab" role="tab" [attr.aria-selected]="cfgTab === 'resumen'" [class.activo]="cfgTab === 'resumen'" (click)="elegirCfgTab('resumen')">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
+          <span>Resumen</span>
+        </button>
+        <button class="cfg-tab" role="tab" [attr.aria-selected]="cfgTab === 'bots'" [class.activo]="cfgTab === 'bots'" (click)="elegirCfgTab('bots')">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="11" rx="2"/><path d="M12 8V4M8 4h8"/><circle cx="9" cy="13" r="1" fill="currentColor" stroke="none"/><circle cx="15" cy="13" r="1" fill="currentColor" stroke="none"/><path d="M9 16.5h6"/></svg>
+          <span>Bots</span>
+          <span class="cfg-tab-cnt">{{bots.length}}</span>
+        </button>
+        <button class="cfg-tab" role="tab" [attr.aria-selected]="cfgTab === 'destinos'" [class.activo]="cfgTab === 'destinos'" (click)="elegirCfgTab('destinos')">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/></svg>
+          <span>Destinos</span>
+          <span class="cfg-tab-cnt">{{canales.length}}</span>
+        </button>
+        <button class="cfg-tab" role="tab" [attr.aria-selected]="cfgTab === 'conjuntos'" [class.activo]="cfgTab === 'conjuntos'" (click)="elegirCfgTab('conjuntos')">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          <span>Conjuntos</span>
+          <span class="cfg-tab-cnt">{{acoplamientos.length}}</span>
+        </button>
+        <button class="cfg-tab" role="tab" [attr.aria-selected]="cfgTab === 'ajustes'" [class.activo]="cfgTab === 'ajustes'" (click)="elegirCfgTab('ajustes')">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+          <span>Ajustes</span>
+        </button>
+      </nav>
+
+      <!-- RESUMEN: el mapa de todo -->
+      <div class="cfg-panel" *ngIf="cfgTab === 'resumen'">
+        <div class="cfg-fila cfg-modo-fila">
+          <div class="cfg-modo-txt">
+            <span class="cfg-panel-titulo">¿Dónde se publica ahora?</span>
+            <span class="cfg-ayuda">El modo se aplica al instante. REAL = tu canal público. PRUEBA = tu canal privado de ensayos.</span>
+          </div>
           <app-modo-toggle (modoCambiado)="modoCambiadoEnCfg()"></app-modo-toggle>
         </div>
-        <span class="cfg-ayuda">El modo se aplica apenas lo tocás; lo demás, al guardar.</span>
+        <div class="cfg-resumen-grid">
+          <button class="cfg-resumen-card" (click)="elegirCfgTab('bots')">
+            <span class="cfg-resumen-num">{{bots.length}}</span>
+            <span class="cfg-resumen-nombre">Bots</span>
+            <span class="cfg-ayuda">Quién publica. Sin bot no sale nada.</span>
+            <span class="enlace">IR A BOTS →</span>
+          </button>
+          <button class="cfg-resumen-card" (click)="elegirCfgTab('destinos')">
+            <span class="cfg-resumen-num">{{canales.length}}</span>
+            <span class="cfg-resumen-nombre">Destinos</span>
+            <span class="cfg-ayuda">Canales o grupos que reciben los posts.</span>
+            <span class="enlace">IR A DESTINOS →</span>
+          </button>
+          <button class="cfg-resumen-card" (click)="elegirCfgTab('conjuntos')">
+            <span class="cfg-resumen-num">{{acoplamientos.length}}</span>
+            <span class="cfg-resumen-nombre">Conjuntos</span>
+            <span class="cfg-ayuda">Publicar el mismo post en varios destinos a la vez.</span>
+            <span class="enlace">IR A CONJUNTOS →</span>
+          </button>
+        </div>
+        <div class="cfg-pipe" aria-label="Ruta de publicación">
+          <span class="cfg-pipe-paso"><b>1</b> Bot publica</span>
+          <svg class="cfg-pipe-flecha" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+          <span class="cfg-pipe-paso"><b>2</b> Destino recibe</span>
+          <svg class="cfg-pipe-flecha" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+          <span class="cfg-pipe-paso"><b>3</b> Conjunto = varios a la vez</span>
+        </div>
+        <span class="cfg-ayuda cfg-centro" *ngIf="!bots.length">Empieza por <button class="enlace" (click)="elegirCfgTab('bots')">crear tu primer bot</button>. Después agrega tu canal.</span>
+        <span class="cfg-ayuda cfg-centro" *ngIf="bots.length && !canales.length">Ya tienes bot. Ahora <button class="enlace" (click)="elegirCfgTab('destinos')">agrega tu canal o grupo</button>.</span>
       </div>
 
-      <!-- telegram -->
-      <div class="cfg-grupo">
-        <span class="tally">TELEGRAM</span>
+      <!-- modo (vive en Resumen, se mantiene el binding original) -->
+      <div class="cfg-grupo" [hidden]="cfgTab !== 'resumen'">
+        <span class="cfg-ayuda">Los cambios de modo se aplican en cuanto los tocas; lo demás de esta ventana, al guardar o al instante según cada tarjeta.</span>
+      </div>
 
-        <div class="cfg-campo">
-          <span class="cfg-etiqueta" id="cfg-token-et">Token del bot</span>
-          <div class="cfg-token" *ngIf="!cfgTokenEditando">
-            <span class="cfg-token-val" [class.vacio]="!cfg.bot_token_configurado">{{cfg.bot_token_configurado ? cfg.bot_token : 'Sin token configurado'}}</span>
-            <button class="cfg-mini" (click)="reemplazarToken()">REEMPLAZAR</button>
+      <!-- (la ruta bot → destino → conjunto ahora vive en la pestaña Resumen) -->
+
+      <!-- BOTS -->
+      <div class="cfg-grupo" [hidden]="cfgTab !== 'bots'">
+        <div class="cfg-panel-head">
+          <span class="cfg-panel-titulo">Bots: quién publica</span>
+          <span class="cfg-ayuda">Crea tu bot con @BotFather en Telegram, pega aquí su token y listo. Se guarda al instante y cifrado.</span>
+        </div>
+        <div class="cfg-grupo-cab">
+          <span class="tally">TUS BOTS</span>
+          <span class="chip" title="Bots cargados">{{bots.length}} bot<ng-container *ngIf="bots.length !== 1">s</ng-container></span>
+        </div>
+        <span class="cfg-ayuda">Después asígnalo a cada destino en la pestaña Destinos.</span>
+        <div class="cfg-lista">
+          <div class="cfg-card" *ngFor="let b of bots">
+            <div class="cfg-card-fila" *ngIf="botEditando !== b.id">
+              <div class="cfg-avatar" aria-hidden="true">{{b.nombre.trim().charAt(0).toUpperCase() || 'B'}}</div>
+              <div class="cfg-card-main">
+                <div class="cfg-card-nombre">{{b.nombre}}</div>
+                <div class="cfg-card-sub tally">
+                  <span class="chip" [class.chip-live]="b.token_configurado" [class.chip-error]="!b.token_configurado">{{b.token_configurado ? 'TOKEN OK' : 'SIN TOKEN'}}</span>
+                  <span class="mono" *ngIf="b.username" title="Usuario fijo de Telegram (no cambia con tu nombre personalizado)">@{{b.username}}</span>
+                  <span>· {{canalesDeBot(b.id).length}} canal<ng-container *ngIf="canalesDeBot(b.id).length !== 1">es</ng-container></span>
+                  <span *ngIf="b.token" class="mono">{{b.token}}</span>
+                </div>
+                <div class="cfg-card-pertenencia" *ngIf="canalesDeBot(b.id).length">Publica en: {{nombresCanalesDeBot(b.id)}}</div>
+                <div class="cfg-card-pertenencia tenue" *ngIf="!canalesDeBot(b.id).length">Sin canales asignados todavía.</div>
+              </div>
+              <div class="cfg-card-acc">
+                <button class="cfg-mini" (click)="empezarEditarBot(b)">EDITAR</button>
+                <button class="cfg-mini cfg-mini-peligro" *ngIf="botBorrando !== b.id" (click)="pedirBorrarBot(b.id)">BORRAR</button>
+                <span class="cfg-confirm" *ngIf="botBorrando === b.id">
+                  <span>¿Borrar?</span>
+                  <button class="enlace" (click)="cancelarBorrarBot()">NO</button>
+                  <button class="enlace cfg-peligro-txt" (click)="eliminarBot(b.id)">SÍ</button>
+                </span>
+              </div>
+            </div>
+            <div class="cfg-edicion" *ngIf="botEditando === b.id">
+              <div class="cfg-fila">
+                <input class="cfg-input caret-blue" [(ngModel)]="botEditNombre" placeholder="Nombre del bot" aria-label="Nombre del bot" />
+                <input class="cfg-input" [(ngModel)]="botEditToken" type="password" placeholder="Nuevo token (vacío = no cambiar)" aria-label="Nuevo token" />
+              </div>
+              <div class="cfg-fila cfg-edicion-pie">
+                <span class="cfg-ayuda">El token se guarda cifrado. Déjalo vacío para conservar el actual.</span>
+                <span class="cfg-edicion-acc">
+                  <button class="enlace" (click)="cancelarEditarBot()">CANCELAR</button>
+                  <button class="cfg-mini" (click)="guardarBot(b)" [disabled]="!botEditNombre.trim() || botGuardando">GUARDAR</button>
+                </span>
+              </div>
+            </div>
           </div>
-          <div class="cfg-token" *ngIf="cfgTokenEditando">
-            <input
-              class="cfg-input caret-blue"
-              type="password"
-              [(ngModel)]="cfgToken"
-              placeholder="Pegá el token nuevo"
-              autocomplete="new-password"
-              spellcheck="false"
-              aria-labelledby="cfg-token-et"
-              (keyup.enter)="guardarCfg()"
-            />
-            <button class="cfg-mini" (click)="cancelarToken()">CANCELAR</button>
+          <div class="cfg-lista-vacio" *ngIf="!bots.length">Sin bots. Agrega el primero abajo.</div>
+        </div>
+        <div class="cfg-alta">
+          <span class="cfg-alta-titulo">Nuevo bot</span>
+          <div class="cfg-fila">
+            <input class="cfg-input caret-blue" [(ngModel)]="nuevoBotNombre" placeholder="Nombre (ej. Bot Estrenos)" aria-label="Nombre del nuevo bot" />
+            <input class="cfg-input" [(ngModel)]="nuevoBotToken" type="password" placeholder="Token de @BotFather" aria-label="Token del nuevo bot" />
+            <button class="cfg-mini cfg-mini-acento" (click)="agregarBot()" [disabled]="!nuevoBotNombre.trim() || !nuevoBotToken.trim()">AÑADIR BOT</button>
           </div>
-          <span class="cfg-error" *ngIf="cfgErrores['bot_token']">{{cfgErrores['bot_token']}}</span>
         </div>
+      </div>
 
-        <div class="cfg-campo">
-          <label class="cfg-etiqueta" for="cfg-canal-principal">Canal principal (modo real)</label>
-          <input
-            id="cfg-canal-principal"
-            class="cfg-input caret-blue"
-            [(ngModel)]="cfg.canal_principal"
-            placeholder="Sin definir — se usa el valor de respaldo"
-            autocomplete="off"
-            spellcheck="false"
-            (keyup.enter)="guardarCfg()"
-          />
-          <span class="cfg-error" *ngIf="cfgErrores['canal_principal']">{{cfgErrores['canal_principal']}}</span>
+      <!-- canales y grupos -->
+      <div class="cfg-grupo" [hidden]="cfgTab !== 'destinos'">
+        <div class="cfg-panel-head">
+          <span class="cfg-panel-titulo">Destinos: dónde se publica</span>
+          <span class="cfg-ayuda">Tu canal o grupo de Telegram. Pega el @nombre o el ID (-100…), toca DETECTAR para verificarlo y asígnale su bot. Se guarda al instante.</span>
         </div>
-
-        <div class="cfg-campo">
-          <label class="cfg-etiqueta" for="cfg-canal-prueba">Canal de prueba (modo prueba)</label>
-          <input
-            id="cfg-canal-prueba"
-            class="cfg-input caret-blue"
-            [(ngModel)]="cfg.canal_prueba"
-            placeholder="Sin definir — se usa el valor de respaldo"
-            autocomplete="off"
-            spellcheck="false"
-            (keyup.enter)="guardarCfg()"
-          />
-          <span class="cfg-error" *ngIf="cfgErrores['canal_prueba']">{{cfgErrores['canal_prueba']}}</span>
+        <div class="cfg-grupo-cab">
+          <span class="tally">TUS DESTINOS</span>
+          <span class="chip" title="Destinos cargados">{{canales.length}} destino<ng-container *ngIf="canales.length !== 1">s</ng-container></span>
         </div>
+        <span class="cfg-ayuda">REAL = tu canal público. PRUEBA = tu canal privado de ensayos. El tipo canal/grupo se detecta solo.</span>
+        <div class="cfg-lista">
+          <div class="cfg-card" *ngFor="let c of canales">
+            <div class="cfg-card-fila" *ngIf="canalEditando !== c.id">
+              <div class="cfg-card-main">
+                <div class="cfg-card-nombre">{{c.nombre}}</div>
+                <div class="cfg-card-sub">
+                  <span class="chip" [class.cfg-chip-test]="c.tipo === 'test'">{{c.tipo === 'test' ? 'PRUEBA' : 'REAL'}}</span>
+                  <span class="chip">{{c.chat_etiqueta || 'SIN DETECTAR'}}</span>
+                  <span class="chip chip-format" title="Bot que publica en este destino">{{nombreBot(c.bot_id)}}</span>
+                </div>
+                <div class="cfg-card-sub tally"><button class="cfg-ojo" (click)="alternarId(c.id)" [title]="idVisible(c.id) ? 'Ocultar ID' : 'Mostrar ID'" [attr.aria-label]="idVisible(c.id) ? 'Ocultar ID' : 'Mostrar ID'"><svg *ngIf="!idVisible(c.id)" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg><svg *ngIf="idVisible(c.id)" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg></button><span class="mono">{{idVisible(c.id) ? c.chat_id : chatIdEnmascarado(c.chat_id)}}</span><span>· {{etiquetaAcoplamientosDeCanal(c.id)}}</span></div>
+              </div>
+              <div class="cfg-card-acc">
+                <button class="cfg-mini" (click)="empezarEditarCanal(c)">EDITAR</button>
+                <button class="cfg-mini cfg-mini-peligro" *ngIf="canalBorrando !== c.id" (click)="pedirBorrarCanal(c.id)">BORRAR</button>
+                <span class="cfg-confirm" *ngIf="canalBorrando === c.id">
+                  <span>¿Borrar?</span>
+                  <button class="enlace" (click)="cancelarBorrarCanal()">NO</button>
+                  <button class="enlace cfg-peligro-txt" (click)="eliminarCanal(c.id)">SÍ</button>
+                </span>
+              </div>
+            </div>
+            <div class="cfg-edicion" *ngIf="canalEditando === c.id">
+              <div class="cfg-fila">
+                <input class="cfg-input caret-blue" [(ngModel)]="canalEditNombre" placeholder="Nombre" aria-label="Nombre del destino" />
+                <input class="cfg-input caret-blue mono" [(ngModel)]="canalEditChatId" placeholder="@canal o -100…" aria-label="Chat ID" />
+              </div>
+              <div class="cfg-fila">
+                <select class="cfg-input" [(ngModel)]="canalEditTipo" aria-label="Tipo de destino">
+                  <option value="real">REAL</option>
+                  <option value="test">PRUEBA</option>
+                </select>
+                <select class="cfg-input" [(ngModel)]="canalEditBot" aria-label="Bot asignado">
+                  <option [ngValue]="null">Sin bot asignado</option>
+                  <option *ngFor="let b of bots" [ngValue]="b.id">{{b.nombre}}</option>
+                </select>
+                <button class="cfg-mini" (click)="redetectarCanalEdit()" [disabled]="!canalEditChatId.trim() || !canalEditBot || canalRedetectando || deteccionCooldown > 0" [title]="!canalEditBot ? 'Primero elige un bot' : (deteccionCooldown > 0 ? 'Enfriamiento entre detecciones' : 'Redetectar tipo')">{{canalRedetectando ? 'REDETECTANDO…' : (deteccionCooldown > 0 ? 'ESPERÁ ' + deteccionCooldown + 's' : 'REDETECTAR')}}</button>
+              </div>
+              <span class="cfg-ayuda" *ngIf="canalEditDeteccion">{{canalEditDeteccion}}</span>
+              <span class="cfg-ayuda" *ngIf="!canalEditBot && !nuevoCanalBotDetectar">Elige un bot (o el de detectar) para activar REDETECTAR.</span>
+              <div class="cfg-fila cfg-edicion-pie">
+                <span class="cfg-ayuda">Pertenece a: {{etiquetaAcoplamientosDeCanal(c.id)}}.</span>
+                <span class="cfg-edicion-acc">
+                  <button class="enlace" (click)="cancelarEditarCanal()">CANCELAR</button>
+                  <button class="cfg-mini" (click)="guardarCanal(c)" [disabled]="canalEditNombre.trim().length < NOMBRE_CANAL_MIN || !canalEditChatId.trim() || canalGuardando">{{canalGuardando ? 'GUARDANDO…' : 'GUARDAR'}}</button>
+                </span>
+              </div>
+            </div>
+          </div>
+          <div class="cfg-lista-vacio" *ngIf="!canales.length">Sin destinos. Agrega tu canal o grupo abajo.</div>
+        </div>
+        <div class="cfg-alta">
+          <span class="cfg-alta-titulo">Nuevo canal / grupo</span>
+          <div class="cfg-fila">
+            <input class="cfg-input caret-blue" placeholder="Nombre (ej. Canal Estrenos)" [(ngModel)]="nuevoCanalNombre" [maxlength]="NOMBRE_CANAL_MAX" aria-label="Nombre del nuevo destino" />
+            <input class="cfg-input caret-blue mono" placeholder="@canal o -100…" [(ngModel)]="nuevoCanalChatId" aria-label="Chat ID del nuevo destino" />
+          </div>
+          <div class="cfg-fila">
+            <span class="cfg-ayuda tally">Nombre: {{nuevoCanalNombre.trim().length}}/{{NOMBRE_CANAL_MAX}} · mínimo {{NOMBRE_CANAL_MIN}} letras (si no llega, DETECTAR lo completa con el nombre real)</span>
+          </div>
+          <div class="cfg-fila">
+            <select class="cfg-input" [(ngModel)]="nuevoCanalTipo" aria-label="Tipo del nuevo destino">
+              <option value="real">REAL</option>
+              <option value="test">PRUEBA</option>
+            </select>
+            <select class="cfg-input" [(ngModel)]="nuevoCanalBot" aria-label="Bot que publicará en el nuevo destino">
+              <option [ngValue]="null">Bot que publica: sin asignar</option>
+              <option *ngFor="let b of bots" [ngValue]="b.id">Bot que publica: {{b.nombre}}</option>
+            </select>
+            <button class="cfg-mini cfg-mini-acento" (click)="agregarCanal()" [disabled]="nuevoCanalNombre.trim().length < NOMBRE_CANAL_MIN || !nuevoCanalChatId.trim() || agregandoCanal">{{agregandoCanal ? 'AÑADIENDO…' : 'AÑADIR'}}</button>
+          </div>
+          <div class="cfg-fila cfg-fila-detect">
+            <span class="cfg-ayuda">Bot para detectar:</span>
+            <select class="cfg-input cfg-input-sm" [(ngModel)]="nuevoCanalBotDetectar" (change)="guardarBotDetectar()" aria-label="Bot comodín solo para detectar">
+              <option [ngValue]="null">Elegir…</option>
+              <option *ngFor="let b of bots" [ngValue]="b.id">{{b.nombre}}</option>
+            </select>
+            <button class="cfg-mini" (click)="detectarCanal()" [disabled]="!nuevoCanalChatId.trim() || !nuevoCanalBotDetectar || detectandoCanal || deteccionCooldown > 0" [title]="!nuevoCanalBotDetectar ? 'Primero elige el bot para detectar' : (deteccionCooldown > 0 ? 'Enfriamiento entre detecciones' : 'Detectar tipo y bots administradores')">{{detectandoCanal ? 'DETECTANDO…' : (deteccionCooldown > 0 ? 'ESPERÁ ' + deteccionCooldown + 's' : 'DETECTAR')}}</button>
+          </div>
+          <span class="cfg-ayuda" *ngIf="deteccionCanal">{{deteccionCanal}}</span>
+          <div class="cfg-miembros" *ngIf="adminBotsDetectados.length">
+            <div class="cfg-miembro" *ngFor="let ab of adminBotsDetectados">
+              <div class="cfg-miembro-main">
+                <span class="cfg-miembro-nombre">{{ab.nombre || '@' + ab.username || 'Bot sin nombre'}}</span>
+                <span class="tally tally-chips"><span class="mono" *ngIf="ab.username">@{{ab.username}}</span><span class="chip chip-admin">ADMINISTRADOR</span><span class="chip chip-live" *ngIf="ab.registrado" [title]="ab.bot_nombre ? 'Ya registrado como ' + ab.bot_nombre : 'Ya registrado'">REGISTRADO</span></span>
+              </div>
+              <button class="cfg-mini" *ngIf="!ab.registrado" (click)="usarAdminBot(ab)" title="Llevar a Bots para registrarlo con su token">REGISTRAR</button>
+            </div>
+          </div>
+          <span class="cfg-ayuda" *ngIf="adminErrorDetect">{{adminErrorDetect}}</span>
+          <span class="cfg-ayuda" *ngIf="!bots.length">Todavía no tienes ningún bot: crea el primero en la pestaña Bots. Sin bot no se puede DETECTAR (igual puedes añadir el destino escribiendo su nombre a mano).</span>
+          <span class="cfg-ayuda" *ngIf="bots.length && !nuevoCanalBotDetectar">⬆ Elige el bot para detectar: puede ser uno dedicado solo a eso, sin asignarlo a ningún destino.</span>
+          <span class="cfg-ayuda">Se detecta con la API de Telegram (getChat) usando ese bot, y de paso lista sus bots administradores para registrarlos. 10s de enfriamiento entre detecciones para no saturar la API; si una detección supera 25s se cancela sola.</span>
+        </div>
+      </div>
 
-        <span class="cfg-ayuda">Canales: @nombredecanal o id numérico (ej. -1001234567890). Si lo dejás vacío, se usa el valor de respaldo.</span>
+      <!-- acoplamientos -->
+      <div class="cfg-grupo" [hidden]="cfgTab !== 'conjuntos'">
+        <div class="cfg-panel-head">
+          <span class="cfg-panel-titulo">Conjuntos: publicar en varios a la vez</span>
+          <span class="cfg-ayuda">Un conjunto es un paquete de destinos. Ejemplo: “Estrenos” = Canal Pelis + Grupo Charla. Lo eliges al publicar o al programar la cola.</span>
+        </div>
+        <div class="cfg-grupo-cab">
+          <span class="tally">TUS CONJUNTOS</span>
+          <span class="chip" title="Conjuntos">{{acoplamientos.length}} conjunto<ng-container *ngIf="acoplamientos.length !== 1">s</ng-container></span>
+        </div>
+        <div class="cfg-lista">
+          <div class="cfg-card" *ngFor="let a of acoplamientos" [class.abierta]="acoplamientoSeleccionado === a.id">
+            <div class="cfg-card-fila">
+              <div class="cfg-card-main">
+                <div class="cfg-card-nombre" *ngIf="acopRenombrando !== a.id">{{a.nombre}}</div>
+                <div class="cfg-fila" *ngIf="acopRenombrando === a.id">
+                  <input class="cfg-input caret-blue" [(ngModel)]="acopRenameTxt" (keyup.enter)="guardarNombreAcoplamiento(a)" aria-label="Nombre del acoplamiento" />
+                  <button class="cfg-mini" (click)="guardarNombreAcoplamiento(a)">GUARDAR</button>
+                  <button class="enlace" (click)="cancelarRenombrarAcoplamiento()">CANCELAR</button>
+                </div>
+                <div class="cfg-card-sub tally">{{a.canales.length}} destino<ng-container *ngIf="a.canales.length !== 1">s</ng-container></div>
+                <div class="cfg-miembros-resumen" *ngIf="acoplamientoSeleccionado !== a.id">
+                  <span class="chip" *ngFor="let m of miembrosDe(a).slice(0, 4)">{{m.nombre}}</span>
+                  <span class="tally" *ngIf="a.canales.length > 4">+{{a.canales.length - 4}} más</span>
+                  <span class="cfg-card-pertenencia tenue" *ngIf="!a.canales.length">Vacío: ábrelo y agrega destinos.</span>
+                </div>
+              </div>
+              <div class="cfg-card-acc">
+                <button class="cfg-mini" (click)="seleccionarAcoplamiento(a)">{{acoplamientoSeleccionado === a.id ? 'CERRAR' : 'VER / EDITAR'}}</button>
+              </div>
+            </div>
+            <div class="cfg-acop-detalle" *ngIf="acoplamientoSeleccionado === a.id">
+              <div class="cfg-miembros" *ngIf="miembrosDe(a).length">
+                <div class="cfg-miembro" *ngFor="let m of miembrosDe(a)">
+                  <div class="cfg-miembro-main">
+                    <span class="cfg-miembro-nombre">{{m.nombre}}</span>
+                    <span class="tally tally-chips"><span class="chip">{{m.chat_etiqueta || 'SIN DETECTAR'}}</span><span class="chip chip-format" title="Bot que publica en este destino">{{nombreBot(m.bot_id)}}</span></span>
+                    <span class="tally tally-chips"><button class="cfg-ojo" (click)="alternarId(m.id)" [title]="idVisible(m.id) ? 'Ocultar ID' : 'Mostrar ID'" [attr.aria-label]="idVisible(m.id) ? 'Ocultar ID' : 'Mostrar ID'"><svg *ngIf="!idVisible(m.id)" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg><svg *ngIf="idVisible(m.id)" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg></button><span class="mono">{{idVisible(m.id) ? m.chat_id : chatIdEnmascarado(m.chat_id)}}</span></span>
+                  </div>
+                  <button class="cfg-miembro-x" (click)="toggleCanalEnAcoplamiento(m.id)" title="Quitar de {{a.nombre}}" [attr.aria-label]="'Quitar ' + m.nombre">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
+                  </button>
+                </div>
+              </div>
+              <div class="cfg-lista-vacio" *ngIf="canales.length && !miembrosDe(a).length">Vacío: elige un destino abajo para llenarlo.</div>
+              <div class="cfg-fila" *ngIf="canalesFueraDe(a).length">
+                <select class="cfg-input" [(ngModel)]="acopAgregarId" [attr.aria-label]="'Destino para agregar a ' + a.nombre">
+                  <option [ngValue]="null">Agregar destino…</option>
+                  <option *ngFor="let c of canalesFueraDe(a)" [ngValue]="c.id">{{c.nombre}} ({{c.tipo === 'test' ? 'PRUEBA' : 'REAL'}} · {{c.chat_etiqueta || 'SIN DETECTAR'}})</option>
+                </select>
+                <button class="cfg-mini" (click)="agregarCanalAcoplamiento()" [disabled]="!acopAgregarId">AÑADIR</button>
+              </div>
+              <span class="cfg-ayuda" *ngIf="canales.length && !canalesFueraDe(a).length">Ya están todos tus destinos en este conjunto.</span>
+              <div class="cfg-lista-vacio" *ngIf="!canales.length">Primero crea un destino en la pestaña Destinos.</div>
+              <div class="cfg-fila cfg-acop-pie">
+                <button class="enlace" (click)="empezarRenombrarAcoplamiento(a)">RENOMBRAR</button>
+                <span class="cfg-confirm" *ngIf="acopBorrando !== a.id">
+                  <button class="enlace cfg-peligro-txt" (click)="pedirBorrarAcoplamiento(a.id)">BORRAR CONJUNTO</button>
+                </span>
+                <span class="cfg-confirm" *ngIf="acopBorrando === a.id">
+                  <span>¿Borrar “{{a.nombre}}”? Los destinos quedan intactos.</span>
+                  <button class="enlace" (click)="cancelarBorrarAcoplamiento()">NO</button>
+                  <button class="enlace cfg-peligro-txt" (click)="eliminarAcoplamiento(a.id)">SÍ, BORRAR</button>
+                </span>
+              </div>
+            </div>
+          </div>
+          <div class="cfg-lista-vacio" *ngIf="!acoplamientos.length">Sin conjuntos. Crea uno para publicar en varios destinos (ej. “Estrenos”).</div>
+        </div>
+        <div class="cfg-fila">
+          <input class="cfg-input caret-blue" placeholder="Nombre del conjunto (ej. Estrenos)" [(ngModel)]="nuevoAcoplamientoNombre" (keyup.enter)="agregarAcoplamiento()" aria-label="Nombre del nuevo conjunto" />
+          <button class="cfg-mini cfg-mini-acento" (click)="agregarAcoplamiento()" [disabled]="!nuevoAcoplamientoNombre.trim()">CREAR CONJUNTO</button>
+        </div>
       </div>
 
       <!-- cola y caption -->
-      <div class="cfg-grupo">
+      <div class="cfg-grupo" [hidden]="cfgTab !== 'ajustes'">
+        <div class="cfg-panel-head">
+          <span class="cfg-panel-titulo">Ajustes: ritmo y límites</span>
+          <span class="cfg-ayuda">Estos 3 números sí necesitan GUARDAR abajo. Todo lo demás (bots, destinos, conjuntos) ya se guardó al instante.</span>
+        </div>
         <span class="tally">COLA Y CAPTION</span>
         <div class="cfg-numeros">
           <div class="cfg-campo">
-            <label class="cfg-etiqueta" for="cfg-limite">Límite del caption (caracteres)</label>
+            <label class="cfg-etiqueta" for="cfg-limite">Máximo del texto (caracteres)</label>
             <input
               id="cfg-limite"
               class="cfg-input caret-blue"
@@ -546,7 +812,7 @@
             <span class="cfg-error" *ngIf="cfgErrores['limite_caption']">{{cfgErrores['limite_caption']}}</span>
           </div>
           <div class="cfg-campo">
-            <label class="cfg-etiqueta" for="cfg-intervalo">Intervalo de la cola (segundos)</label>
+            <label class="cfg-etiqueta" for="cfg-intervalo">Cada cuánto publica la cola (segundos)</label>
             <input
               id="cfg-intervalo"
               class="cfg-input caret-blue"
@@ -560,7 +826,7 @@
             <span class="cfg-error" *ngIf="cfgErrores['intervalo_cola_ms']">{{cfgErrores['intervalo_cola_ms']}}</span>
           </div>
           <div class="cfg-campo">
-            <label class="cfg-etiqueta" for="cfg-colgada">Liberar publicaciones trabadas (minutos)</label>
+            <label class="cfg-etiqueta" for="cfg-colgada">Reintentar si se traba (minutos)</label>
             <input
               id="cfg-colgada"
               class="cfg-input caret-blue"
@@ -577,6 +843,7 @@
     </fieldset>
 
     <div class="modal-pie cfg-pie">
+      <span class="cfg-ayuda cfg-pie-hint">Bots, destinos y conjuntos se guardan al instante. Solo Ajustes necesita GUARDAR.</span>
       <button class="enlace" (click)="cerrarCfg()">CERRAR</button>
       <button *ngIf="cfg && !cfgCargando && !cfgError" class="boton-accion cfg-guardar" (click)="guardarCfg()" [disabled]="cfgGuardando">
         <span *ngIf="!cfgGuardando">GUARDAR</span>

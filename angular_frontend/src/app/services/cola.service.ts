@@ -16,8 +16,8 @@ export class ColaService {
     return this.api.get<ColaItem | null>(`/api/cola/publicacion/${publicacionId}`);
   }
 
-  programar(publicacionId: number, programadoPara: string): Observable<ColaItem> {
-    return this.api.post<ColaItem>('/api/cola', { publicacionId, programadoPara });
+  programar(publicacionId: number, programadoPara: string, acoplamientoId?: number | null): Observable<ColaItem> {
+    return this.api.post<ColaItem>('/api/cola', { publicacionId, programadoPara, acoplamientoId });
   }
 
   reprogramar(id: number, programadoPara: string): Observable<ColaItem> {

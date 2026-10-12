@@ -23,10 +23,13 @@ import java.util.Base64;
  * mismo ciphertext.
  *
  * Clave maestra (32 bytes): se toma de la variable de entorno CROW_CLAVE_MAESTRA
- * (Base64) si existe — recomendado en producción — o, si no, se lee/crea una vez
- * en el archivo clave_maestra.bin (compartido por las 3 instancias que corren en
- * el mismo directorio de trabajo). Si se pierde la clave, los valores cifrados no
- * se pueden descifrar: hay que re-ingresarlos desde la UI.
+ * (Base64) si existe — recomendado en producción — o, si no, del archivo
+ * clave_maestra.bin. El archivo se busca primero en la carpeta de arranque y
+ * despues junto al codigo que corre (padres del jar o de target/classes), para
+ * que la clave NO dependa de desde donde se lanzo el proceso: ni la IP, ni el
+ * puerto, ni la carpeta de arranque la alteran. Si no se encuentra en ningun
+ * lado se genera una vez en la carpeta de arranque. Si se pierde la clave, los
+ * valores cifrados no se pueden descifrar: hay que re-ingresarlos desde la UI.
  */
 @Slf4j
 @Service
@@ -106,7 +109,7 @@ public class ConfigCifradoService {
             log.info("Cifrado: clave maestra cargada desde la variable de entorno {}", ENV_CLAVE);
             return new SecretKeySpec(bytes, "AES");
         }
-        Path archivo = Path.of(ARCHIVO_CLAVE);
+        Path archivo = resolverArchivoClave();
         try {
             if (Files.exists(archivo)) {
                 byte[] bytes = Files.readAllBytes(archivo);
@@ -127,6 +130,43 @@ public class ConfigCifradoService {
             return new SecretKeySpec(nueva, "AES");
         } catch (IOException e) {
             throw new IllegalStateException("No se pudo leer/escribir " + archivo.toAbsolutePath(), e);
+        }
+    }
+
+    /**
+     * Ubicacion del archivo de clave sin depender de la carpeta de arranque:
+     * 1) ./clave_maestra.bin (comportamiento historico),
+     * 2) subiendo hasta 3 niveles desde donde corre el codigo (cubre
+     *    java_backend/target/*.jar y target/classes del IDE).
+     * Si no existe en ningun lado, se usara (y creara) el de la carpeta de arranque.
+     */
+    private static Path resolverArchivoClave() {
+        Path local = Path.of(ARCHIVO_CLAVE);
+        try {
+            if (Files.exists(local)) return local;
+            Path base = codigoBase();
+            Path dir = base == null ? null : (Files.isDirectory(base) ? base : base.getParent());
+            for (int i = 0; dir != null && i < 4; i++) {
+                Path candidato = dir.resolve(ARCHIVO_CLAVE);
+                if (Files.exists(candidato)) {
+                    log.info("Cifrado: clave encontrada junto al codigo en {}", candidato.toAbsolutePath());
+                    return candidato;
+                }
+                dir = dir.getParent();
+            }
+        } catch (Exception e) {
+            log.warn("Cifrado: no se pudo resolver la ubicacion junto al codigo, se usa la carpeta de arranque");
+        }
+        return local;
+    }
+
+    private static Path codigoBase() {
+        try {
+            java.net.URI uri = ConfigCifradoService.class.getProtectionDomain()
+                    .getCodeSource().getLocation().toURI();
+            return Path.of(uri);
+        } catch (Exception e) {
+            return null;
         }
     }
 }

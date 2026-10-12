@@ -3,9 +3,12 @@ package api.crow.service;
 import api.crow.domain.ColaPublicacion;
 import api.crow.domain.LinkVideo;
 import api.crow.domain.Publicacion;
+import api.crow.domain.Canal;
 import api.crow.repository.ColaPublicacionRepository;
 import api.crow.repository.LinkVideoRepository;
 import api.crow.repository.PublicacionRepository;
+import api.crow.repository.AcoplamientoRepository;
+import api.crow.repository.CanalRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
@@ -45,6 +48,8 @@ public class ColaPublicacionService implements ApplicationRunner {
     private final TelegramModoService modo;
     private final ConfigService config;
     private final PlatformTransactionManager txManager;
+    private final AcoplamientoRepository acoplamientos;
+    private final CanalRepository canales;
 
     /** Última vez que corrió el barrido (este proceso). */
     private volatile long ultimoProceso;
@@ -100,7 +105,7 @@ public class ColaPublicacionService implements ApplicationRunner {
         return cola.findActivoPorPublicacion(publicacionId).map(this::toMap);
     }
 
-    public Map<String, Object> programar(Long publicacionId, LocalDateTime programadoPara) {
+    public Map<String, Object> programar(Long publicacionId, LocalDateTime programadoPara, Long acoplamientoId) {
         if (programadoPara == null) {
             throw new IllegalArgumentException("programadoPara es obligatorio");
         }
@@ -112,6 +117,10 @@ public class ColaPublicacionService implements ApplicationRunner {
         if (cola.tieneActivo(publicacionId)) {
             throw new IllegalArgumentException("Ese borrador ya está programado en la cola.");
         }
+        if (acoplamientoId != null) {
+            acoplamientos.findById(acoplamientoId)
+                    .orElseThrow(() -> new IllegalArgumentException("El acoplamiento no existe"));
+        }
         long limite = config.limiteCaption();
         long longitud = p.getCaption() == null ? 0 : p.getCaption().codePointCount(0, p.getCaption().length());
         if (longitud > limite) {
@@ -122,6 +131,7 @@ public class ColaPublicacionService implements ApplicationRunner {
         item.setPublicacion(p);
         item.setProgramadoPara(programadoPara);
         item.setModo(modo.modoActual());
+        item.setAcoplamientoId(acoplamientoId);
         item.setEstado(ColaPublicacion.ESTADO_PENDIENTE);
         return toMap(cola.save(item));
     }
@@ -220,10 +230,17 @@ public class ColaPublicacionService implements ApplicationRunner {
             }
 
             List<LinkVideo> enlaces = links.findByTituloIdOrderByOrdenAsc(p.getTitulo().getId());
-            String canal = modo.canalDeModo(item.getModo());
-            Map<String, Object> resp = telegram.sendPhoto(p, enlaces, canal);
+            List<String> canales = canalesDeAcoplamiento(item.getAcoplamientoId());
+            if (canales.isEmpty()) {
+                canales = List.of(modo.canalDeModo(item.getModo()));
+            }
+            final Map<String, Object>[] respHolder = new Map[1];
+            for (String canal : canales) {
+                respHolder[0] = telegram.sendPhoto(p, enlaces, canal);
+            }
 
             tx().executeWithoutResult(status -> {
+                Map<String, Object> resp = respHolder[0];
                 ColaPublicacion c = cola.findById(item.getId()).orElse(null);
                 if (c == null) return;
                 c.setEstado(ColaPublicacion.ESTADO_PUBLICADO);
@@ -235,13 +252,14 @@ public class ColaPublicacionService implements ApplicationRunner {
                 Publicacion pub = c.getPublicacion();
                 pub.setEstado("publicado");
                 pub.setModo(c.getModo());
+                pub.setAcoplamientoId(c.getAcoplamientoId());
                 pub.setTelegramMessageId(((Number) resp.get("message_id")).longValue());
                 pub.setTelegramChatId(resp.get("chat_id").toString());
                 pub.setFechaPublicacion(LocalDateTime.now());
                 publicaciones.save(pub);
             });
             log.info("Cola: publicó '{}' en {} (msg {})",
-                    p.getTitulo().getTituloOriginal(), canal, resp.get("message_id"));
+                    p.getTitulo().getTituloOriginal(), canales, respHolder[0].get("message_id"));
         } catch (Exception e) {
             log.warn("Cola: el item {} falló: {}", item.getId(), e.getMessage());
             tx().executeWithoutResult(status -> {
@@ -253,6 +271,15 @@ public class ColaPublicacionService implements ApplicationRunner {
                 cola.save(c);
             });
         }
+    }
+
+    private List<String> canalesDeAcoplamiento(Long acoplamientoId) {
+        if (acoplamientoId == null) return List.of();
+        return canales.findAllById(
+                acoplamientos.findConCanalesById(acoplamientoId)
+                        .map(a -> a.getCanales().stream().map(c -> c.getId()).toList())
+                        .orElse(List.of())
+        ).stream().filter(c -> Boolean.TRUE.equals(c.getActivo())).map(Canal::getChatId).toList();
     }
 
     private TransactionTemplate tx() {
@@ -271,6 +298,9 @@ public class ColaPublicacionService implements ApplicationRunner {
         m.put("programado_para", c.getProgramadoPara() == null ? null : c.getProgramadoPara().toString());
         m.put("estado", c.getEstado());
         m.put("modo", c.getModo());
+        m.put("acoplamiento_id", c.getAcoplamientoId());
+        m.put("acoplamiento", c.getAcoplamientoId() == null ? null : acoplamientos.findById(c.getAcoplamientoId())
+                .map(a -> a.getNombre()).orElse(null));
         m.put("error", c.getError());
         m.put("publicado_en", c.getPublicadoEn() == null ? null : c.getPublicadoEn().toString());
         m.put("telegram_message_id", c.getTelegramMessageId());

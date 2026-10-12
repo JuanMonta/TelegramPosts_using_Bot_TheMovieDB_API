@@ -444,6 +444,17 @@
 }
 .tip { font-size: 0.78em; }
 
+.acop-select {
+  height: 40px;
+  padding: 0 10px;
+  background: var(--bg-input);
+  border: 1px solid var(--hairline);
+  border-radius: var(--rad-btn);
+  color: var(--text-primary);
+  font-size: 12px;
+  max-width: 180px;
+}
+
 .boton-publicar {
   display: inline-flex;
   align-items: center;
