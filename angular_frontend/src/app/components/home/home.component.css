@@ -47,7 +47,14 @@
 .pane-modo {
   display: flex;
   align-items: center;
-  gap: 8px;
+  flex-wrap: wrap;
+  column-gap: 10px;
+  row-gap: 10px;
+}
+/* La tira respira en su propia fila: ya no se aplasta entre los botones. */
+.pane-modo app-tira-contexto {
+  flex: 1 1 100%;
+  min-width: 0;
 }
 .pane-stats {
   display: flex;
@@ -934,7 +941,7 @@
 
 .chip-cola { border-color: rgba(240, 180, 58, 0.5); color: #f0b43a; }
 
-/* modal (mismo patr�n que el gestor de plantillas) */
+/* modal (mismo patrón que el gestor de plantillas) */
 .modal-fondo {
   position: fixed;
   inset: 0;
@@ -1110,6 +1117,7 @@
 .cfg-input:focus { outline: none; border-color: var(--action); }
 /* La lista nativa del desplegable la pinta el SO: sin fondo explícito sale blanca con letras blancas. */
 .cfg-input option,
+.cfg-input optgroup,
 .cfg-select option,
 .cola-select option {
   background-color: var(--bg-elevated);
@@ -1294,6 +1302,9 @@
   border-top: 1px solid var(--hairline-soft);
 }
 .cfg-miembros { display: flex; flex-direction: column; gap: 6px; }
+/* Subgrupo REAL/PRUEBA dentro del conjunto: mitades divididas a simple vista. */
+.cfg-subgrupo { display: flex; flex-direction: column; gap: 6px; }
+.cfg-subgrupo + .cfg-subgrupo { margin-top: 4px; }
 .cfg-miembro {
   display: flex;
   align-items: center;

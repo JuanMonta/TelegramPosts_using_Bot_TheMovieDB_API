@@ -87,6 +87,8 @@ export interface CatalogoFila {
   fecha: string | null;
   comentarios_count: number;
   programado_para?: string | null;
+  acoplamiento_id?: number | null;
+  acoplamiento?: string | null;
 }
 
 export interface Comentario {
@@ -180,4 +182,19 @@ export function urlPoster(posterPath: string | null, tam = 'w780'): string | nul
 
 export function etiquetaTipo(tipo: TipoContenido): string {
   return tipo === 'movie' ? 'PELÍCULA' : 'SERIE';
+}
+
+export function etiquetaModo(modo: string | null | undefined): string {
+  return modo === 'test' ? 'PRUEBA' : 'REAL';
+}
+
+/**
+ * Destinos útiles de un conjunto para un modo: activos y de ese modo.
+ * Sin modo (aún no cargado) devuelve los activos. Así reales y pruebas
+ * se mantienen divididos y un post de prueba nunca llega al canal real.
+ */
+export function destinosDeModo(canales: Canal[], modo: string | null | undefined): Canal[] {
+  const activos = canales.filter((c) => c.activo !== false);
+  if (!modo) return activos;
+  return activos.filter((c) => c.tipo === modo);
 }

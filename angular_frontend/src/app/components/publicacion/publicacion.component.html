@@ -17,7 +17,7 @@
       {{estado === 'publicado' ? 'PUBLICADO' : 'BORRADOR'}}
     </span>
 
-    <app-modo-toggle class="barra-modo" (modoCambiado)="recargarTrasModo()"></app-modo-toggle>
+    <app-tira-contexto #tira class="barra-tira" (modoCambiado)="recargarTrasModo()" (crearConjunto)="irAConfiguracion()"></app-tira-contexto>
 
     <button class="ico-btn toggle-disposicion" (click)="alternarDisposicion()" [attr.aria-pressed]="disposicion === 'lado'" [attr.aria-label]="disposicion === 'pila' ? 'Ver editor y preview lado a lado' : 'Ver editor y preview apilados'" [title]="disposicion === 'pila' ? 'Editor y preview lado a lado' : 'Editor y preview apilados (arriba/abajo)'">
       <svg *ngIf="disposicion === 'pila'" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3.5" y="4" width="7" height="16" rx="1.8"/><rect x="13.5" y="4" width="7" height="16" rx="1.8"/></svg>
@@ -231,10 +231,6 @@
     <div class="compositor-pie">
       <span class="tally tip">El preview es idéntico a lo que verá el canal.</span>
       <div class="pie-acciones">
-        <select *ngIf="acoplamientos.length" class="acop-select" [(ngModel)]="acoplamientoSeleccionado" title="Elegí un acoplamiento">
-          <option [ngValue]="null">Canal por defecto</option>
-          <option *ngFor="let a of acoplamientos" [ngValue]="a.id">{{a.nombre}}</option>
-        </select>
         <button *ngIf="estado === 'borrador' && !colaActiva" class="boton-programar" (click)="abrirProgramacion()" [class.en-curso]="programando" [disabled]="accionCola">
           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9.5"/><polyline points="12 6.5 12 12 15.5 14.5"/></svg>
           <span>PROGRAMAR</span>

@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit } from '@angular/core';
+import { Component, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Location } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
@@ -12,12 +12,17 @@ import { ColaService } from '../../services/cola.service';
 import { ApiService } from '../../services/api.service';
 import { NavegacionService } from '../../services/navegacion.service';
 import { AcoplamientoService } from '../../services/acoplamiento.service';
+import { ConfiguracionService } from '../../services/configuracion.service';
+import { ConjuntoTrabajoService } from '../../services/conjunto-trabajo.service';
+import { TiraContextoComponent } from '../tira-contexto/tira-contexto.component';
 import {
   Acoplamiento,
   ColaItem,
   LinkVideo,
   Publicacion,
   TituloDetalle,
+  destinosDeModo,
+  etiquetaModo,
   etiquetaTipo,
   nombreMostrable,
   urlPoster
@@ -71,7 +76,7 @@ export class PublicacionComponent implements OnInit, OnDestroy {
   publicando = false;
   editando = false;
   confirmandoBorrado = false;
-confirmandoRepost = false;
+  confirmandoRepost = false;
   confirmandoEliminar = false;
 
   // cola de publicaciones programadas
@@ -80,9 +85,9 @@ confirmandoRepost = false;
   programarPara = '';
   accionCola = false;
 
-  // acoplamientos
+  // acoplamientos (el elegido vive en el conjunto de trabajo, visible en la tira)
   acoplamientos: Acoplamiento[] = [];
-  acoplamientoSeleccionado: number | null = null;
+  @ViewChild('tira') tira?: TiraContextoComponent;
 
   idCopiado = false;
   private copiarTimer: number | undefined;
@@ -133,7 +138,9 @@ confirmandoRepost = false;
     private api: ApiService,
     private snack: MatSnackBar,
     private navegacion: NavegacionService,
-    private acoplamientoSvc: AcoplamientoService
+    private acoplamientoSvc: AcoplamientoService,
+    private configSvc: ConfiguracionService,
+    private trabajo: ConjuntoTrabajoService
   ) {
     try {
       this.disposicion = localStorage.getItem('disposicion') === 'lado' ? 'lado' : 'pila';
@@ -705,13 +712,37 @@ confirmandoRepost = false;
     });
   }
 
+  /** Conjunto elegido o bloqueo con guía cuando hay conjuntos pero ninguno elegido. */
+  private conjuntoParaAccion(accion: 'publicar' | 'programar'): number | null {
+    const id = this.trabajo.actual;
+    if (this.acoplamientos.length && id === null) {
+      this.snack.open(`Elige un conjunto en la tira para ${accion}.`, 'OK', { duration: 6000 });
+      this.tira?.enfocarSelector();
+      return null;
+    }
+    const ent = this.trabajo.entidad(this.acoplamientos);
+    const modo = this.configSvc.modo;
+    if (ent && !destinosDeModo(ent.canales, modo).length) {
+      this.snack.open(`El conjunto “${ent.nombre}” no tiene destinos de modo ${etiquetaModo(modo)}: agrégalos en Configuración.`, 'OK', { duration: 6000 });
+      return null;
+    }
+    return id;
+  }
+
+  irAConfiguracion(): void {
+    this.navegacion.abrirCfgAlLlegar = true;
+    this.router.navigate(['/']);
+  }
+
   async publicar(): Promise<void> {
     if (!this.publicacion || this.publicando || this.editando) return;
+    const conjuntoId = this.conjuntoParaAccion('publicar');
+    if (this.acoplamientos.length && conjuntoId === null) return;
     this.publicando = true;
     await this.forzarGuardado();
     const p = this.publicacion;
     if (!p) { this.publicando = false; return; }
-    this.publicacionesService.publicar(p.id, this.acoplamientoSeleccionado).pipe(takeUntil(this.killed)).subscribe({
+    this.publicacionesService.publicar(p.id, conjuntoId).pipe(takeUntil(this.killed)).subscribe({
       next: (listo) => {
         this.publicacion = listo;
         this.estado = listo.estado;
@@ -907,8 +938,11 @@ confirmandoRepost = false;
   confirmarProgramar(): void {
     const pub = this.publicacion;
     if (!pub || !this.programarPara || this.accionCola) return;
+    // La programación hereda el conjunto de trabajo.
+    const conjuntoId = this.conjuntoParaAccion('programar');
+    if (this.acoplamientos.length && conjuntoId === null) return;
     this.accionCola = true;
-    this.colaService.programar(pub.id, this.programarPara).pipe(takeUntil(this.killed)).subscribe({
+    this.colaService.programar(pub.id, this.programarPara, conjuntoId).pipe(takeUntil(this.killed)).subscribe({
       next: (item) => {
         this.colaActiva = item;
         this.programando = false;

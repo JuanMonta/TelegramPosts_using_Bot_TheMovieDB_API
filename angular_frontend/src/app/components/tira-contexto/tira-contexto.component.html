@@ -1,0 +1,13 @@
+<div class="tira" role="group" aria-label="Contexto de trabajo">
+  <app-modo-toggle (modoCambiado)="modoCambiado.emit($event)"></app-modo-toggle>
+  <ng-container *ngIf="acoplamientos.length; else sinConjuntos">
+    <select #selector class="tira-select" [(ngModel)]="seleccionado" (change)="elegir(seleccionado)" title="Conjunto de trabajo" aria-label="Conjunto de trabajo">
+      <option [ngValue]="null">Elegir conjunto…</option>
+      <option *ngFor="let a of acoplamientos" [ngValue]="a.id">{{a.nombre}} ({{utiles(a)}} en {{etiquetaModoActual()}})</option>
+    </select>
+    <span class="tally dimmed tira-destinos" [class.tira-vacio]="resumenVacio" *ngIf="resumen" [title]="resumen">{{resumen}}</span>
+  </ng-container>
+  <ng-template #sinConjuntos>
+    <button class="enlace" (click)="crearConjunto.emit()">Crear conjunto</button>
+  </ng-template>
+</div>

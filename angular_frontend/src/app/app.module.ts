@@ -12,6 +12,7 @@ import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
 import { HomeComponent } from './components/home/home.component';
 import { PublicacionComponent } from './components/publicacion/publicacion.component';
 import { ModoToggleComponent } from './components/modo-toggle/modo-toggle.component';
+import { TiraContextoComponent } from './components/tira-contexto/tira-contexto.component';
 import { AppRouteReuseStrategy } from './app-route-reuse.strategy';
 
 @NgModule({
@@ -19,7 +20,8 @@ import { AppRouteReuseStrategy } from './app-route-reuse.strategy';
     AppComponent,
     HomeComponent,
     PublicacionComponent,
-    ModoToggleComponent
+    ModoToggleComponent,
+    TiraContextoComponent
   ],
   imports: [
     BrowserModule,

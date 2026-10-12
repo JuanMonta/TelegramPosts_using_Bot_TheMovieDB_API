@@ -85,6 +85,13 @@
   margin-left: 8px;
 }
 
+/* Tira de contexto en la barra: ocupa el espacio libre sin empujar el resto. */
+.barra-tira {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-left: 8px;
+}
+
 .borrar-holder { display: flex; flex: none; }
 .borrar-c { display: flex; }
 .confirmar {
@@ -443,17 +450,6 @@
   gap: 14px;
 }
 .tip { font-size: 0.78em; }
-
-.acop-select {
-  height: 40px;
-  padding: 0 10px;
-  background: var(--bg-input);
-  border: 1px solid var(--hairline);
-  border-radius: var(--rad-btn);
-  color: var(--text-primary);
-  font-size: 12px;
-  max-width: 180px;
-}
 
 .boton-publicar {
   display: inline-flex;

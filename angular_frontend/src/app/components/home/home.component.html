@@ -16,7 +16,7 @@
           <button class="cola-btn cfg-btn" (click)="abrirCfg()" title="Configuración" aria-label="Configuración">
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
           </button>
-          <app-modo-toggle (modoCambiado)="recargarTrasModo()"></app-modo-toggle>
+          <app-tira-contexto (modoCambiado)="recargarTrasModo()" (crearConjunto)="abrirCfg()"></app-tira-contexto>
         </div>
         <div class="pane-stats">
           <span class="stat"><b>{{total}}</b> guardados</span>
@@ -220,6 +220,7 @@
                 <span *ngIf="t.rating" class="tally">★ {{t.rating.toFixed(1)}}</span>
                 <span *ngIf="t.comentarios_count" class="tally chip-comentarios">💬 {{t.comentarios_count}}</span>
                 <span *ngIf="t.programado_para" class="chip chip-cola" title="Programado en la cola">⏰ {{fmtColaFecha(t.programado_para)}}</span>
+                <span *ngIf="t.acoplamiento" class="chip" title="Conjunto de publicación">{{t.acoplamiento}}</span>
                 <span *ngIf="t.generos" class="fila-sinopsis">{{t.generos}}</span>
               </div>
             </div>
@@ -252,6 +253,7 @@
               <div class="grid-sub">
                 <span>{{tipo(t.tipo)}}</span><span *ngIf="t.anio"> · {{t.anio}}</span><span *ngIf="t.rating"> · ★{{t.rating.toFixed(1)}}</span><span *ngIf="t.comentarios_count"> · 💬{{t.comentarios_count}}</span>
                 <span *ngIf="t.programado_para" class="chip chip-cola" title="Programado en la cola">⏰ {{fmtColaFecha(t.programado_para)}}</span>
+                <span *ngIf="t.acoplamiento" class="chip" title="Conjunto de publicación">{{t.acoplamiento}}</span>
               </div>
             </div>
           </button>
@@ -735,7 +737,7 @@
                   <button class="cfg-mini" (click)="guardarNombreAcoplamiento(a)">GUARDAR</button>
                   <button class="enlace" (click)="cancelarRenombrarAcoplamiento()">CANCELAR</button>
                 </div>
-                <div class="cfg-card-sub tally">{{a.canales.length}} destino<ng-container *ngIf="a.canales.length !== 1">s</ng-container></div>
+                <div class="cfg-card-sub tally">{{miembrosPorModo(a, 'real').length}} REAL · {{miembrosPorModo(a, 'test').length}} PRUEBA</div>
                 <div class="cfg-miembros-resumen" *ngIf="acoplamientoSeleccionado !== a.id">
                   <span class="chip" *ngFor="let m of miembrosDe(a).slice(0, 4)">{{m.nombre}}</span>
                   <span class="tally" *ngIf="a.canales.length > 4">+{{a.canales.length - 4}} más</span>
@@ -747,23 +749,43 @@
               </div>
             </div>
             <div class="cfg-acop-detalle" *ngIf="acoplamientoSeleccionado === a.id">
-              <div class="cfg-miembros" *ngIf="miembrosDe(a).length">
-                <div class="cfg-miembro" *ngFor="let m of miembrosDe(a)">
-                  <div class="cfg-miembro-main">
-                    <span class="cfg-miembro-nombre">{{m.nombre}}</span>
-                    <span class="tally tally-chips"><span class="chip">{{m.chat_etiqueta || 'SIN DETECTAR'}}</span><span class="chip chip-format" title="Bot que publica en este destino">{{nombreBot(m.bot_id)}}</span></span>
-                    <span class="tally tally-chips"><button class="cfg-ojo" (click)="alternarId(m.id)" [title]="idVisible(m.id) ? 'Ocultar ID' : 'Mostrar ID'" [attr.aria-label]="idVisible(m.id) ? 'Ocultar ID' : 'Mostrar ID'"><svg *ngIf="!idVisible(m.id)" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg><svg *ngIf="idVisible(m.id)" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg></button><span class="mono">{{idVisible(m.id) ? m.chat_id : chatIdEnmascarado(m.chat_id)}}</span></span>
-                  </div>
-                  <button class="cfg-miembro-x" (click)="toggleCanalEnAcoplamiento(m.id)" title="Quitar de {{a.nombre}}" [attr.aria-label]="'Quitar ' + m.nombre">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
-                  </button>
+              <ng-template #filaMiembro let-m let-acop="acop">
+                <div class="cfg-miembro-main">
+                  <span class="cfg-miembro-nombre">{{m.nombre}}</span>
+                  <span class="tally tally-chips"><span class="chip">{{m.chat_etiqueta || 'SIN DETECTAR'}}</span><span class="chip chip-format" title="Bot que publica en este destino">{{nombreBot(m.bot_id)}}</span></span>
+                  <span class="tally tally-chips"><button class="cfg-ojo" (click)="alternarId(m.id)" [title]="idVisible(m.id) ? 'Ocultar ID' : 'Mostrar ID'" [attr.aria-label]="idVisible(m.id) ? 'Ocultar ID' : 'Mostrar ID'"><svg *ngIf="!idVisible(m.id)" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg><svg *ngIf="idVisible(m.id)" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg></button><span class="mono">{{idVisible(m.id) ? m.chat_id : chatIdEnmascarado(m.chat_id)}}</span></span>
                 </div>
+                <button class="cfg-miembro-x" (click)="toggleCanalEnAcoplamiento(m.id)" title="Quitar de {{acop.nombre}}" [attr.aria-label]="'Quitar ' + m.nombre">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
+                </button>
+              </ng-template>
+              <div class="cfg-subgrupo">
+                <span class="tally">REAL · {{miembrosPorModo(a, 'real').length}}</span>
+                <div class="cfg-miembros" *ngIf="miembrosPorModo(a, 'real').length">
+                  <div class="cfg-miembro" *ngFor="let m of miembrosPorModo(a, 'real')">
+                    <ng-container *ngTemplateOutlet="filaMiembro; context: {$implicit: m, acop: a}"></ng-container>
+                  </div>
+                </div>
+                <div class="cfg-lista-vacio" *ngIf="!miembrosPorModo(a, 'real').length">Sin destinos REALES: créalos en la pestaña Destinos.</div>
               </div>
-              <div class="cfg-lista-vacio" *ngIf="canales.length && !miembrosDe(a).length">Vacío: elige un destino abajo para llenarlo.</div>
+              <div class="cfg-subgrupo">
+                <span class="tally">PRUEBA · {{miembrosPorModo(a, 'test').length}}</span>
+                <div class="cfg-miembros" *ngIf="miembrosPorModo(a, 'test').length">
+                  <div class="cfg-miembro" *ngFor="let m of miembrosPorModo(a, 'test')">
+                    <ng-container *ngTemplateOutlet="filaMiembro; context: {$implicit: m, acop: a}"></ng-container>
+                  </div>
+                </div>
+                <div class="cfg-lista-vacio" *ngIf="!miembrosPorModo(a, 'test').length">Sin destinos de PRUEBA: créalos en la pestaña Destinos.</div>
+              </div>
               <div class="cfg-fila" *ngIf="canalesFueraDe(a).length">
                 <select class="cfg-input" [(ngModel)]="acopAgregarId" [attr.aria-label]="'Destino para agregar a ' + a.nombre">
                   <option [ngValue]="null">Agregar destino…</option>
-                  <option *ngFor="let c of canalesFueraDe(a)" [ngValue]="c.id">{{c.nombre}} ({{c.tipo === 'test' ? 'PRUEBA' : 'REAL'}} · {{c.chat_etiqueta || 'SIN DETECTAR'}})</option>
+                  <optgroup label="REAL" *ngIf="faltantesPorModo(a, 'real').length">
+                    <option *ngFor="let c of faltantesPorModo(a, 'real')" [ngValue]="c.id">{{c.nombre}} · {{c.chat_etiqueta || 'SIN DETECTAR'}}</option>
+                  </optgroup>
+                  <optgroup label="PRUEBA" *ngIf="faltantesPorModo(a, 'test').length">
+                    <option *ngFor="let c of faltantesPorModo(a, 'test')" [ngValue]="c.id">{{c.nombre}} · {{c.chat_etiqueta || 'SIN DETECTAR'}}</option>
+                  </optgroup>
                 </select>
                 <button class="cfg-mini" (click)="agregarCanalAcoplamiento()" [disabled]="!acopAgregarId">AÑADIR</button>
               </div>

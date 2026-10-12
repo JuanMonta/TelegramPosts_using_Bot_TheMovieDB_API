@@ -88,6 +88,19 @@ public class PublicacionController {
             }
         }
 
+        // Nombres de los conjuntos usados (para la insignia del catálogo).
+        Map<Long, String> nombreAcoplamiento = new HashMap<>();
+        List<Long> acopIds = pubPorTitulo.values().stream()
+                .map(Publicacion::getAcoplamientoId)
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .toList();
+        if (!acopIds.isEmpty()) {
+            for (var a : acoplamientoRepository.findAllById(acopIds)) {
+                nombreAcoplamiento.put(a.getId(), a.getNombre());
+            }
+        }
+
         int borradores = 0;
         int publicados = 0;
         int sin = 0;
@@ -112,6 +125,9 @@ public class PublicacionController {
             m.put("fecha", fechaMostrable(p, t));
             m.put("comentarios_count", p == null ? 0 : conteoComentarios.getOrDefault(p.getId(), 0L));
             m.put("programado_para", p == null ? null : programado.get(p.getId()));
+            Long aid = p == null ? null : p.getAcoplamientoId();
+            m.put("acoplamiento_id", aid);
+            m.put("acoplamiento", aid == null ? null : nombreAcoplamiento.get(aid));
             items.add(m);
         }
 
@@ -229,12 +245,25 @@ public class PublicacionController {
         }
         try {
             List<LinkVideo> links = linkVideoRepository.findByTituloIdOrderByOrdenAsc(p.getTitulo().getId());
-            List<String> canales = acoplamientoId != null
-                    ? canalRepository.findAllById(acoplamientoRepository.findConCanalesById(acoplamientoId)
-                            .map(a -> a.getCanales().stream().map(c -> c.getId()).toList())
-                            .orElse(List.of()))
-                            .stream().filter(c -> Boolean.TRUE.equals(c.getActivo())).map(Canal::getChatId).toList()
-                    : List.of(telegramModo.canalActivo());
+            // El conjunto guarda destinos reales y de prueba divididos: solo salen
+            // los del modo activo, para que un post de prueba nunca llegue al canal real.
+            String modo = telegramModo.modoActual();
+            List<String> canales;
+            if (acoplamientoId != null) {
+                canales = canalRepository.findAllById(acoplamientoRepository.findConCanalesById(acoplamientoId)
+                                .map(a -> a.getCanales().stream().map(c -> c.getId()).toList())
+                                .orElse(List.of()))
+                        .stream()
+                        .filter(c -> Boolean.TRUE.equals(c.getActivo()) && modo.equals(c.getTipo()))
+                        .map(Canal::getChatId).toList();
+                if (canales.isEmpty()) {
+                    String etiqueta = TelegramModoService.MODO_TEST.equals(modo) ? "PRUEBA" : "REAL";
+                    return ResponseEntity.badRequest().body(Map.of("error",
+                            "El conjunto no tiene destinos de modo " + etiqueta + ". Agregalos en Configuración."));
+                }
+            } else {
+                canales = List.of(telegramModo.canalActivo());
+            }
             if (canales.isEmpty()) {
                 return ResponseEntity.badRequest().body(Map.of("error", "No hay canales de destino configurados."));
             }

@@ -230,7 +230,14 @@ public class ColaPublicacionService implements ApplicationRunner {
             }
 
             List<LinkVideo> enlaces = links.findByTituloIdOrderByOrdenAsc(p.getTitulo().getId());
-            List<String> canales = canalesDeAcoplamiento(item.getAcoplamientoId());
+            // Igual que al publicar a mano: del conjunto solo salen los destinos
+            // del modo con que se programó el item.
+            List<String> canales = canalesDeAcoplamiento(item.getAcoplamientoId(), item.getModo());
+            if (canales.isEmpty() && item.getAcoplamientoId() != null) {
+                String etiqueta = TelegramModoService.MODO_TEST.equals(item.getModo()) ? "PRUEBA" : "REAL";
+                throw new IllegalStateException("El conjunto no tiene destinos de modo " + etiqueta
+                        + ". Agregalos en Configuración.");
+            }
             if (canales.isEmpty()) {
                 canales = List.of(modo.canalDeModo(item.getModo()));
             }
@@ -273,13 +280,14 @@ public class ColaPublicacionService implements ApplicationRunner {
         }
     }
 
-    private List<String> canalesDeAcoplamiento(Long acoplamientoId) {
+    private List<String> canalesDeAcoplamiento(Long acoplamientoId, String modoItem) {
         if (acoplamientoId == null) return List.of();
         return canales.findAllById(
                 acoplamientos.findConCanalesById(acoplamientoId)
                         .map(a -> a.getCanales().stream().map(c -> c.getId()).toList())
                         .orElse(List.of())
-        ).stream().filter(c -> Boolean.TRUE.equals(c.getActivo())).map(Canal::getChatId).toList();
+        ).stream().filter(c -> Boolean.TRUE.equals(c.getActivo())
+                && (modoItem == null || modoItem.equals(c.getTipo()))).map(Canal::getChatId).toList();
     }
 
     private TransactionTemplate tx() {

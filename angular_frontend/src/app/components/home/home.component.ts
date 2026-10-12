@@ -13,6 +13,7 @@ import { ConfiguracionService, ConfiguracionTelegram } from '../../services/conf
 import { AcoplamientoService } from '../../services/acoplamiento.service';
 import { CanalService } from '../../services/canal.service';
 import { BotService } from '../../services/bot.service';
+import { ConjuntoTrabajoService } from '../../services/conjunto-trabajo.service';
 import {
   Acoplamiento,
   AdminBotDetectado,
@@ -24,6 +25,8 @@ import {
   Publicacion,
   SugerenciaHit,
   TmdbHit,
+  destinosDeModo,
+  etiquetaModo,
   etiquetaTipo,
   urlPoster
 } from '../../models/modelos';
@@ -197,9 +200,15 @@ export class HomeComponent implements OnInit, OnDestroy {
     private configSvc: ConfiguracionService,
     private acoplamientoSvc: AcoplamientoService,
     private canalSvc: CanalService,
-    private botSvc: BotService
+    private botSvc: BotService,
+    private trabajo: ConjuntoTrabajoService
   ) {}
   ngOnInit(): void {
+    // Viene de la tira del editor: abrir Configuración al llegar.
+    if (this.navegacion.abrirCfgAlLlegar) {
+      this.navegacion.abrirCfgAlLlegar = false;
+      setTimeout(() => this.abrirCfg(), 0);
+    }
     this.cargar();
     this.refrescarColaSilencioso();
     // La instancia se reutiliza (RouteReuseStrategy). Al volver de /publicacion/:id
@@ -526,6 +535,17 @@ export class HomeComponent implements OnInit, OnDestroy {
   abrirCola(): void {
     this.colaAbierta = true;
     this.cargarCola();
+    // La cola hereda el conjunto de trabajo (editable en su desplegable).
+    this.colaNuevoAcoplamiento = this.trabajo.actual;
+    this.acoplamientoSvc.listar().pipe(takeUntil(this.killed)).subscribe({
+      next: (a) => {
+        this.acoplamientos = a;
+        if (this.colaNuevoAcoplamiento !== null && !a.some((x) => x.id === this.colaNuevoAcoplamiento)) {
+          this.colaNuevoAcoplamiento = null;
+        }
+      },
+      error: () => undefined
+    });
     if (this.colaTimer === undefined) {
       this.colaTimer = window.setInterval(() => this.cargarColaSilencioso(), 20000);
     }
@@ -884,6 +904,14 @@ export class HomeComponent implements OnInit, OnDestroy {
     const dentro = new Set(a.canales.map((c) => c.id));
     return this.canales.filter((c) => !dentro.has(c.id));
   }
+  /** Miembros del conjunto de un modo ('real'|'test'), para mostrarlos divididos. */
+  miembrosPorModo(a: Acoplamiento, modo: 'real' | 'test'): Canal[] {
+    return this.miembrosDe(a).filter((c) => c.tipo === modo);
+  }
+  /** Destinos aún no agregados, de un modo. */
+  faltantesPorModo(a: Acoplamiento, modo: 'real' | 'test'): Canal[] {
+    return this.canalesFueraDe(a).filter((c) => c.tipo === modo);
+  }
   agregarCanalAcoplamiento(): void {
     if (!this.acoplamientoSeleccionado || !this.acopAgregarId) return;
     const id = this.acopAgregarId;
@@ -1032,6 +1060,14 @@ export class HomeComponent implements OnInit, OnDestroy {
   }
   programarNuevo(): void {
     if (!this.colaNuevoId || !this.colaNuevaFecha || this.colaAccion) return;
+    const ent = this.colaNuevoAcoplamiento == null
+      ? undefined
+      : this.acoplamientos.find((a) => a.id === this.colaNuevoAcoplamiento);
+    const modo = this.configSvc.modo;
+    if (ent && !destinosDeModo(ent.canales, modo).length) {
+      this.snack.open(`El conjunto “${ent.nombre}” no tiene destinos de modo ${etiquetaModo(modo)}: agrégalos en Configuración.`, 'OK', { duration: 6000 });
+      return;
+    }
     this.colaAccion = true;
     this.colaService.programar(this.colaNuevoId, this.colaNuevaFecha, this.colaNuevoAcoplamiento).pipe(takeUntil(this.killed)).subscribe({
       next: (item) => {
