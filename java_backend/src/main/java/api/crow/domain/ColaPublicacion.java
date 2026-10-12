@@ -39,6 +39,9 @@ public class ColaPublicacion {
     @Column(name = "modo", length = 8)
     private String modo;
 
+    @Column(name = "acoplamiento_id")
+    private Long acoplamientoId;
+
     @Column(name = "error", columnDefinition = "TEXT")
     private String error;
 

@@ -44,7 +44,7 @@ export class ModoToggleComponent implements OnInit, OnDestroy {
   elegir(nuevo: ModoTelegram): void {
     if (nuevo === this.modo || this.cambiando) return;
     if (nuevo === 'test' && !this.testConfigurado) {
-      this.snack.open('Primero configurá el canal y grupo de pruebas (application-local.yaml)', 'OK', { duration: 6000 });
+      this.snack.open('Primero configurá el canal de pruebas en Configuración', 'OK', { duration: 6000 });
       return;
     }
     this.cambiando = true;

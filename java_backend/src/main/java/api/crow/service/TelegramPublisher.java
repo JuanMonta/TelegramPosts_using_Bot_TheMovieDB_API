@@ -1,10 +1,12 @@
 package api.crow.service;
 
-import api.crow.config.TelegramProperties;
 import api.crow.config.TmdbProperties;
 import api.crow.domain.LinkVideo;
 import api.crow.domain.Publicacion;
 import api.crow.domain.Titulo;
+import api.crow.domain.Canal;
+import api.crow.repository.BotRepository;
+import api.crow.repository.CanalRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.FileSystemResource;
@@ -34,9 +36,14 @@ public class TelegramPublisher {
     /** Long-poll de getUpdates: puede bloquear hasta 50s server-side, el read timeout lo cubre holgado. */
     private static final Duration LECTURA_POLL_TIMEOUT = Duration.ofSeconds(70);
 
-    private final TelegramProperties telegram;
     private final TmdbProperties tmdb;
     private final TelegramModoService modo;
+    private final ConfigService config;
+    private final BotRepository botRepository;
+    private final CanalRepository canalRepository;
+    private final ConfigCifradoService cifrado;
+    private final TelegramInfoService info;
+    private final tools.jackson.databind.ObjectMapper jackson = new tools.jackson.databind.ObjectMapper();
 
     private final RestClient restClient = RestClient.builder()
             .baseUrl("https://api.telegram.org")
@@ -68,23 +75,34 @@ public class TelegramPublisher {
     }
 
     /**
-     * Publica el póster + caption + botones de enlaces en el canal activo
-     * (según el modo real/prueba actual).
+     * Publica el p??ster + caption + botones de enlaces en el canal activo
+     * (seg??n el modo real/prueba actual).
      */
     public Map<String, Object> sendPhoto(Publicacion publicacion, List<LinkVideo> links) {
-        return sendPhoto(publicacion, links, modo.canalActivo());
+        return sendPhoto(publicacion, links, modo.canalActivo(), null);
     }
 
     /**
-     * Publica el póster + caption + botones de enlaces en un canal explícito.
-     * Lo usa la cola de publicaciones para respetar el modo en que se programó
-     * el post aunque después se cambie el modo desde el frontend.
-     * El póster se sube como ARCHIVO (multipart), no como URL: Telegram no tiene
+     * Publica el p??ster + caption + botones de enlaces en un canal expl??cito.
+     * Lo usa la cola de publicaciones para respetar el modo en que se program??
+     * el post aunque despu??s se cambie el modo desde el frontend.
+     * El p??ster se sube como ARCHIVO (multipart), no como URL: Telegram no tiene
      * que ir a descargarlo del CDN de TMDB, lo que eliminaba cuelgues de 20s+
-     * cuando el CDN iba lento (y el consiguiente error de conexión en el frontend).
-     * Devuelve el message_id de Telegram y el chat donde se publicó.
+     * cuando el CDN iba lento (y el consiguiente error de conexi??n en el frontend).
+     * Devuelve el message_id de Telegram y el chat donde se public??.
      */
     public Map<String, Object> sendPhoto(Publicacion publicacion, List<LinkVideo> links, String canal) {
+        return sendPhoto(publicacion, links, canal, null);
+    }
+
+    public Map<String, Object> sendPhoto(Publicacion publicacion, List<LinkVideo> links, String canal, Long botId) {
+        if (botId == null && canal != null && !canal.isBlank()) {
+            botId = canalRepository.findAll().stream()
+                    .filter(c -> canal.equals(c.getChatId()))
+                    .map(Canal::getBotId)
+                    .filter(java.util.Objects::nonNull)
+                    .findFirst().orElse(null);
+        }
         Resource foto = posterImagen(publicacion.getTitulo());
 
         MultiValueMap<String, Object> form = new LinkedMultiValueMap<>();
@@ -93,7 +111,7 @@ public class TelegramPublisher {
         form.add("caption", captionConLinks(publicacion, links));
         form.add("parse_mode", "HTML");
 
-        JsonNode resp = llamar("sendPhoto", form, MediaType.MULTIPART_FORM_DATA);
+        JsonNode resp = llamar("sendPhoto", form, MediaType.MULTIPART_FORM_DATA, canal, botId);
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("message_id", resp.path("message_id").asLong());
         out.put("chat_id", resp.path("chat").path("id").asLong());
@@ -101,10 +119,10 @@ public class TelegramPublisher {
     }
 
     /**
-     * Edita el post original en el canal con la información actual (caption + botones),
-     * sin repostear. La foto no cambia (el póster del título es fijo).
-     * Si el contenido ya es idéntico al del mensaje, Telegram responde
-     * "message is not modified" y se trata como una edición no-op exitosa.
+     * Edita el post original en el canal con la informaci??n actual (caption + botones),
+     * sin repostear. La foto no cambia (el p??ster del t??tulo es fijo).
+     * Si el contenido ya es id??ntico al del mensaje, Telegram responde
+     * "message is not modified" y se trata como una edici??n no-op exitosa.
      */
     public void editarPost(Publicacion publicacion, List<LinkVideo> links) {
         if (publicacion.getTelegramMessageId() == null
@@ -120,10 +138,10 @@ public class TelegramPublisher {
         body.put("parse_mode", "HTML");
 
         try {
-            llamar("editMessageCaption", body, MediaType.APPLICATION_JSON);
+            llamar("editMessageCaption", body, MediaType.APPLICATION_JSON, publicacion.getTelegramChatId(), null);
         } catch (IllegalStateException e) {
             if (e.getMessage() != null && e.getMessage().contains("message is not modified")) {
-                return; // el post ya tenía exactamente este contenido: no-op exitoso
+                return; // el post ya ten??a exactamente este contenido: no-op exitoso
             }
             throw e;
         }
@@ -131,7 +149,7 @@ public class TelegramPublisher {
 
     /**
      * Elimina el post original del canal (si existe) y publica uno nuevo
-     * con la información actual. Devuelve los datos del mensaje nuevo.
+     * con la informaci??n actual. Devuelve los datos del mensaje nuevo.
      */
     public Map<String, Object> republicar(Publicacion publicacion, List<LinkVideo> links) {
         if (publicacion.getTelegramMessageId() != null
@@ -140,7 +158,7 @@ public class TelegramPublisher {
             try {
                 borrarPost(publicacion);
             } catch (Exception ignore) {
-                // el mensaje ya no existía (borrado manual o el bot perdió acceso): se sigue con el nuevo
+                // el mensaje ya no exist??a (borrado manual o el bot perdi?? acceso): se sigue con el nuevo
             }
         }
         return sendPhoto(publicacion, links);
@@ -156,15 +174,15 @@ public class TelegramPublisher {
         Map<String, Object> del = new LinkedHashMap<>();
         del.put("chat_id", publicacion.getTelegramChatId());
         del.put("message_id", publicacion.getTelegramMessageId());
-        llamar("deleteMessage", del, MediaType.APPLICATION_JSON);
+        llamar("deleteMessage", del, MediaType.APPLICATION_JSON, publicacion.getTelegramChatId(), null);
     }
 
-    // ---- póster como archivo ----
+    // ---- p??ster como archivo ----
 
     /** Foto para subir a Telegram: el archivo local cachead si existe; si no, lo descarga de TMDB. */
     private Resource posterImagen(Titulo t) {
         if (t == null || t.getPosterPath() == null || t.getPosterPath().isBlank()) {
-            throw new IllegalStateException("El título no tiene póster. Cárgalo primero desde TMDB.");
+            throw new IllegalStateException("El t??tulo no tiene p??ster. C??rgalo primero desde TMDB.");
         }
         Resource local = posterLocal(t);
         if (local != null) return local;
@@ -177,7 +195,7 @@ public class TelegramPublisher {
             Path p = Path.of(t.getPosterLocalPath()).toAbsolutePath().normalize();
             if (Files.exists(p) && Files.isRegularFile(p)) return new FileSystemResource(p);
         } catch (Exception ignore) {
-            // no hay caché local: se descarga desde TMDB
+            // no hay cach?? local: se descarga desde TMDB
         }
         return null;
     }
@@ -187,7 +205,7 @@ public class TelegramPublisher {
             String url = tmdb.imageBaseUrl() + "/" + tmdb.posterSize() + t.getPosterPath();
             byte[] img = posterClient.get().uri(url).retrieve().body(byte[].class);
             if (img == null || img.length == 0) {
-                throw new IllegalStateException("Póster vacío para tmdbId=" + t.getTmdbId());
+                throw new IllegalStateException("P??ster vac??o para tmdbId=" + t.getTmdbId());
             }
             cachearLocal(t, img);
             return new ByteArrayResource(img) {
@@ -199,25 +217,25 @@ public class TelegramPublisher {
         } catch (IllegalStateException e) {
             throw e;
         } catch (Exception e) {
-            throw new IllegalStateException("No se pudo descargar el póster desde TMDB: " + e.getMessage());
+            throw new IllegalStateException("No se pudo descargar el p??ster desde TMDB: " + e.getMessage());
         }
     }
 
-    /** Guarda el póster en disco para no volver a descargarlo. Caché opcional: falla silencioso. */
+    /** Guarda el p??ster en disco para no volver a descargarlo. Cach?? opcional: falla silencioso. */
     private void cachearLocal(Titulo t, byte[] img) {
         try {
             Path dir = Path.of(tmdb.posterLocalDir()).toAbsolutePath().normalize();
             Files.createDirectories(dir);
             Files.write(dir.resolve(t.getTmdbId() + ".jpg"), img);
         } catch (Exception ignore) {
-            // caché opcional: si falla, la próxima vez se descarga de nuevo
+            // cach?? opcional: si falla, la pr??xima vez se descarga de nuevo
         }
     }
 
     /**
      * Caption final del post: el caption del borrador + los links como texto
-     * HTML al final ("📥 <a href=...>etiqueta</a>"). No se usan botones inline:
-     * Telegram desactiva el botón nativo "Dejar un comentario" cuando el post
+     * HTML al final ("???? <a href=...>etiqueta</a>"). No se usan botones inline:
+     * Telegram desactiva el bot??n nativo "Dejar un comentario" cuando el post
      * lleva botones, por eso los links van directo en el texto del post.
      */
     private String captionConLinks(Publicacion publicacion, List<LinkVideo> links) {
@@ -229,7 +247,7 @@ public class TelegramPublisher {
             for (LinkVideo l : links) {
                 if (sb.length() > 0) sb.append("\n\n");
                 String texto = l.getTextoBoton() == null || l.getTextoBoton().isBlank() ? "Link" : l.getTextoBoton();
-                sb.append("📥 <a href=\"").append(escapeHtml(l.getUrl())).append("\">")
+                sb.append("???? <a href=\"").append(escapeHtml(l.getUrl())).append("\">")
                         .append(escapeHtml(texto)).append("</a>");
             }
         }
@@ -243,17 +261,44 @@ public class TelegramPublisher {
                 .replace("\"", "&quot;").replace("'", "&#39;");
     }
 
-    private final tools.jackson.databind.ObjectMapper jackson = new tools.jackson.databind.ObjectMapper();
+    private String obtenerToken(Long botId) {
+        if (botId == null) return config.tokenBot();
+        try {
+            return botRepository.findById(botId)
+                    .map(b -> cifrado.descifrar(b.getTokenCifrado()))
+                    .filter(t -> t != null && !t.isBlank())
+                    .orElseGet(() -> config.tokenBot());
+        } catch (Exception e) {
+            return config.tokenBot();
+        }
+    }
 
-    /** Llama a la Bot API con el body indicado (JSON o multipart según content-type). */
-    private JsonNode llamar(String metodo, Object body, MediaType contentType) {
-        if (telegram.botToken() == null || telegram.botToken().isBlank())
-            throw new IllegalStateException("TELEGRAM_BOT_TOKEN no configurado. Pégalo en application-local.yaml en app.telegram.bot-token");
-        if (modo.canalActivo() == null || modo.canalActivo().isBlank())
-            throw new IllegalStateException("TELEGRAM_CHANNEL_ID no configurado.");
+    /** Token efectivo para un chat: respeta el bot asignado al canal si existe. */
+    public String tokenParaChat(String chatId) {
+        if (chatId == null || chatId.isBlank()) return config.tokenBot();
+        try {
+            Long botId = canalRepository.findAll().stream()
+                    .filter(c -> chatId.equals(c.getChatId()))
+                    .map(Canal::getBotId)
+                    .filter(java.util.Objects::nonNull)
+                    .findFirst().orElse(null);
+            return obtenerToken(botId);
+        } catch (Exception e) {
+            return config.tokenBot();
+        }
+    }
+    /** Llama a la Bot API con el body indicado (JSON o multipart seg??n content-type). */
+    private JsonNode llamar(String metodo, Object body, MediaType contentType, String canal, Long botId) {
+        String token = obtenerToken(botId);
+        if (token == null || token.isBlank())
+            throw new IllegalStateException("El token del bot no est?? configurado. Cargalo en Configuraci??n (o en TELEGRAM_BOT_TOKEN).");
+        if (token == null || token.isBlank())
+            throw new IllegalStateException("El token del bot no est?? configurado. Cargalo en Configuraci??n (o en TELEGRAM_BOT_TOKEN).");
+        if ((canal == null || canal.isBlank()) && (modo.canalActivo() == null || modo.canalActivo().isBlank()))
+            throw new IllegalStateException("El canal de publicaci??n no est?? configurado. Cargalo en Configuraci??n (o TELEGRAM_CHANNEL_ID).");
         try {
             String respBody = restClient.post()
-                    .uri("/bot" + telegram.botToken() + "/" + metodo)
+                    .uri("/bot" + token + "/" + metodo)
                     .contentType(contentType)
                     .body(body)
                     .retrieve()
@@ -263,7 +308,7 @@ public class TelegramPublisher {
                     })
                     .body(String.class);
             if (respBody == null || respBody.isBlank()) {
-                throw new IllegalStateException("Respuesta vacía de Telegram");
+                throw new IllegalStateException("Respuesta vac??a de Telegram");
             }
             JsonNode resp = jackson.readTree(respBody);
             if (!resp.path("ok").asBoolean(false)) {
@@ -278,18 +323,19 @@ public class TelegramPublisher {
     }
 
     /**
-     * Obtiene actualizaciones del grupo de discusión (long-poll).
+     * Obtiene actualizaciones del grupo de discusi??n (long-poll).
      * Devuelve el nodo "result" del JSON de Telegram (array de updates).
-     * offset: update_id más alto procesado (Telegram no devuelve updates ya leídos).
-     * timeout: espera server-side en segundos (0 = inmediato, 50 = long-poll estándar).
+     * offset: update_id m??s alto procesado (Telegram no devuelve updates ya le??dos).
+     * timeout: espera server-side en segundos (0 = inmediato, 50 = long-poll est??ndar).
      * Usa pollClient porque el read timeout debe cubrir el bloqueo del long-poll.
      */
     public JsonNode getUpdates(long offset, int timeout) {
-        if (telegram.botToken() == null || telegram.botToken().isBlank()) {
-            throw new IllegalStateException("TELEGRAM_BOT_TOKEN no configurado.");
+        String token = config.tokenBot();
+        if (token == null || token.isBlank()) {
+            throw new IllegalStateException("El token del bot no est?? configurado. Cargalo en Configuraci??n.");
         }
         try {
-            String uri = "/bot" + telegram.botToken() + "/getUpdates?offset=" + offset
+            String uri = "/bot" + token + "/getUpdates?offset=" + offset
                     + "&timeout=" + timeout
                     + "&allowed_updates=[\"message\"]";
             String respBody = pollClient.get()
@@ -301,7 +347,7 @@ public class TelegramPublisher {
                     })
                     .body(String.class);
             if (respBody == null || respBody.isBlank()) {
-                throw new IllegalStateException("Respuesta vacía de Telegram getUpdates");
+                throw new IllegalStateException("Respuesta vac??a de Telegram getUpdates");
             }
             JsonNode resp = jackson.readTree(respBody);
             if (!resp.path("ok").asBoolean(false)) {
@@ -315,9 +361,8 @@ public class TelegramPublisher {
         }
     }
 
-    /** Extrae la descripción legible de un body de error de Telegram (fallback: el texto crudo). */
     private String descripcion(String texto) {
-        if (texto == null || texto.isBlank()) return "Telegram rechazó la operación. Revisa BOT_TOKEN y los permisos del bot.";
+        if (texto == null || texto.isBlank()) return "Telegram rechaz? la operaci?n. Revisa BOT_TOKEN y los permisos del bot.";
         try {
             JsonNode n = jackson.readTree(texto);
             String d = n.path("description").asText(null);
@@ -326,4 +371,13 @@ public class TelegramPublisher {
             return texto;
         }
     }
-}
+    /** Obtiene informacion del bot (getMe). Delega a TelegramInfoService. */
+    public JsonNode getMe(String token) {
+        return info.getMe(token);
+    }
+
+    /** Obtiene info del chat (getChat): type=private/group/supergroup/channel + title. */
+    public JsonNode getChat(String token, String chatId) {
+        return info.getChat(token, chatId);
+    }
+    }

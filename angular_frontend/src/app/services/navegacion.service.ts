@@ -10,4 +10,6 @@ import { Injectable } from '@angular/core';
 export class NavegacionService {
   /** true mientras el gestor fue abierto desde la página principal. */
   vinoDeHome = false;
+  /** true para abrir Configuración al llegar a Home (viene de la tira del editor). */
+  abrirCfgAlLlegar = false;
 }

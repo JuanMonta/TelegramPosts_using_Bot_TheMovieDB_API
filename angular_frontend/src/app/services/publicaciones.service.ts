@@ -24,8 +24,8 @@ export class PublicacionesService {
     return this.api.put<Publicacion>(`/api/publicaciones/${id}`, { caption });
   }
 
-  publicar(id: number): Observable<Publicacion> {
-    return this.api.post<Publicacion>(`/api/publicaciones/${id}/publicar`);
+  publicar(id: number, acoplamientoId?: number | null): Observable<Publicacion> {
+    return this.api.post<Publicacion>(`/api/publicaciones/${id}/publicar`, { acoplamientoId });
   }
 
   editarCanal(id: number): Observable<Publicacion> {

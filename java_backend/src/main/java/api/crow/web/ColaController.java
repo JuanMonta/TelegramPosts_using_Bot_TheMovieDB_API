@@ -35,8 +35,9 @@ public class ColaController {
         LocalDateTime programadoPara = body.get("programadoPara") == null
                 ? null
                 : LocalDateTime.parse(body.get("programadoPara").toString());
+        Long acoplamientoId = body.get("acoplamientoId") == null ? null : Long.valueOf(body.get("acoplamientoId").toString());
         try {
-            return ResponseEntity.ok(cola.programar(publicacionId, programadoPara));
+            return ResponseEntity.ok(cola.programar(publicacionId, programadoPara, acoplamientoId));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }

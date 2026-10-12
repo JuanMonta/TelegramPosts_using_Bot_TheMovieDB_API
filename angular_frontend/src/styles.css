@@ -128,6 +128,7 @@ body.modo-test .mat-progress-bar-fill::after { background-color: var(--action); 
   white-space: nowrap;
 }
 .chip-format { border-color: rgba(78, 190, 255, 0.4); color: rgba(140, 210, 255, 0.9); }
+.chip-admin { border-color: rgba(255, 204, 102, 0.55); color: #ffcc66; }
 .chip-draft { border-color: var(--action); color: var(--action); }
 .chip-live { border-color: var(--ok); color: var(--ok); }
 .chip-error { border-color: var(--danger); color: var(--danger); }

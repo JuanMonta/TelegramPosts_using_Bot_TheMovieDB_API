@@ -85,6 +85,13 @@
   margin-left: 8px;
 }
 
+/* Tira de contexto en la barra: ocupa el espacio libre sin empujar el resto. */
+.barra-tira {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-left: 8px;
+}
+
 .borrar-holder { display: flex; flex: none; }
 .borrar-c { display: flex; }
 .confirmar {

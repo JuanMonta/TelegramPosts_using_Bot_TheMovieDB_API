@@ -1,0 +1,36 @@
+.tira {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  min-width: 0;
+  padding: 2px 0;
+}
+.tira-select {
+  flex: 1 1 150px;
+  min-width: 0;
+  max-width: 230px;
+  height: 34px;
+  padding: 0 8px;
+  background: var(--bg-input);
+  border: 1px solid var(--hairline);
+  border-radius: var(--rad-input);
+  color: var(--text-primary);
+  font-size: 0.85em;
+  color-scheme: dark;
+}
+.tira-select option {
+  background-color: var(--bg-elevated);
+  color: var(--text-primary);
+}
+.tira-select:focus { outline: none; border-color: var(--action); }
+.tira-select:focus-visible { outline: 2px solid var(--action); outline-offset: 1px; }
+.tira-destinos {
+  flex: 1 1 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tira-vacio { color: var(--danger); }
+.tira .enlace { font-size: 12.5px; }

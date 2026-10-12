@@ -1,6 +1,5 @@
 package api.crow.service;
 
-import api.crow.config.TelegramProperties;
 import api.crow.domain.Comentario;
 import api.crow.domain.Publicacion;
 import api.crow.domain.Setting;
@@ -38,19 +37,17 @@ public class CommentPoller {
     private final PublicacionRepository publicacionRepository;
     private final ComentarioRepository comentarioRepository;
     private final SettingRepository settingRepository;
-    private final TelegramProperties telegramProps;
     private final TelegramModoService modo;
+    private final ConfigService config;
 
     private Thread hilo;
     private volatile boolean activo;
 
     @PostConstruct
     void arrancar() {
-        if (telegramProps.botToken() == null || telegramProps.botToken().isBlank()
-                || modo.grupoActivo() == null || modo.grupoActivo().isBlank()) {
-            log.info("CommentPoller: sin bot-token/grupo configurado, polling desactivado.");
-            return;
-        }
+        // El hilo arranca siempre: si hoy no hay token/grupo configurados espera y
+        // reintentan cada 30s, así el polling se activa solo al cargarlos en
+        // Configuración, sin reiniciar el backend.
         activo = true;
         hilo = new Thread(this::bucle, "comment-poller");
         hilo.setDaemon(true);
@@ -70,6 +67,12 @@ public class CommentPoller {
         long offset = leerOffset();
         while (activo) {
             try {
+                if (config.tokenBot() == null || config.tokenBot().isBlank()
+                        || modo.grupoActivo() == null || modo.grupoActivo().isBlank()) {
+                    // Sin token/grupo todavía: esperar a que se configuren (hot).
+                    Thread.sleep(30_000);
+                    continue;
+                }
                 JsonNode updates = telegram.getUpdates(offset, TIMEOUT_LONG_POLL);
                 if (updates != null && updates.isArray()) {
                     for (JsonNode update : updates) {
