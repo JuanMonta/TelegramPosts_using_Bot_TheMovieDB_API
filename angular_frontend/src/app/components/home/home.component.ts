@@ -114,6 +114,8 @@ export class HomeComponent implements OnInit, OnDestroy {
   cfgErrores: Record<string, string> = {};
   cfgToken = '';
   cfgTokenEditando = false;
+  tmdbToken = '';
+  tmdbTokenEditando = false;
   cfgIntervaloSeg: number | null = null;
   acoplamientos: Acoplamiento[] = [];
   canales: Canal[] = [];
@@ -590,6 +592,8 @@ export class HomeComponent implements OnInit, OnDestroy {
     this.cfgErrores = {};
     this.cfgToken = '';
     this.cfgTokenEditando = false;
+    this.tmdbToken = '';
+    this.tmdbTokenEditando = false;
     this.cfgError = null;
     this.cfgCargando = true;
     setTimeout(() => this.cfgCarta?.nativeElement.focus(), 0);
@@ -987,6 +991,16 @@ export class HomeComponent implements OnInit, OnDestroy {
     this.cfgToken = '';
     delete this.cfgErrores['bot_token'];
   }
+  reemplazarTmdb(): void {
+    this.tmdbTokenEditando = true;
+    this.tmdbToken = '';
+    delete this.cfgErrores['tmdb_token'];
+  }
+  cancelarTmdb(): void {
+    this.tmdbTokenEditando = false;
+    this.tmdbToken = '';
+    delete this.cfgErrores['tmdb_token'];
+  }
   /** El modo se aplica al instante (igual que el toggle del header). */
   modoCambiadoEnCfg(): void {
     this.recargarTrasModo();
@@ -1000,6 +1014,11 @@ export class HomeComponent implements OnInit, OnDestroy {
       const t = this.cfgToken.trim();
       if (!t) errores['bot_token'] = 'Pegá un token o cancelá el reemplazo.';
       else if (t.length > 512) errores['bot_token'] = 'El token es demasiado largo (máx. 512).';
+    }
+    if (this.tmdbTokenEditando) {
+      const t = this.tmdbToken.trim();
+      if (!t) errores['tmdb_token'] = 'Pega el token o cancela el reemplazo.';
+      else if (t.length > 512) errores['tmdb_token'] = 'El token de TMDB es demasiado largo (máx. 512).';
     }
     const canalValido = (v: string | null): boolean => {
       const s = (v ?? '').trim();
@@ -1030,6 +1049,7 @@ export class HomeComponent implements OnInit, OnDestroy {
       bot_token: this.cfgTokenEditando ? this.cfgToken.trim() : null,
       canal_principal: (cfg.canal_principal ?? '').trim(),
       canal_prueba: (cfg.canal_prueba ?? '').trim(),
+      tmdb_token: this.tmdbTokenEditando ? this.tmdbToken.trim() : null,
       limite_caption: limite,
       intervalo_cola_ms: Math.round(seg * 1000),
       colgada_minutos: colgada
@@ -1040,6 +1060,8 @@ export class HomeComponent implements OnInit, OnDestroy {
         this.cfgIntervaloSeg = c.intervalo_cola_ms / 1000;
         this.cfgTokenEditando = false;
         this.cfgToken = '';
+        this.tmdbTokenEditando = false;
+        this.tmdbToken = '';
         this.configSvc.aplicar(c);
         this.snack.open('Configuración guardada', '✓', { duration: 2500 });
       },
