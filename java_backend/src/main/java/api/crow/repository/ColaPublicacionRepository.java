@@ -56,4 +56,9 @@ public interface ColaPublicacionRepository extends JpaRepository<ColaPublicacion
     @Modifying
     @Query("UPDATE ColaPublicacion c SET c.estado = 'pendiente' WHERE c.estado = 'publicando' AND c.ultimoIntento IS NOT NULL AND c.ultimoIntento < :limite")
     int liberarColgadas(@Param("limite") LocalDateTime limite);
+
+    /** Borra de una vez todos los items en los estados dados (purga de vistas). */
+    @Modifying
+    @Query("DELETE FROM ColaPublicacion c WHERE c.estado IN (:estados)")
+    int purgarPorEstados(@Param("estados") List<String> estados);
 }

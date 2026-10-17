@@ -32,4 +32,14 @@ export class ColaService {
   reintentar(id: number): Observable<ColaItem> {
     return this.api.post<ColaItem>(`/api/cola/${id}/reintentar`, {});
   }
+
+  /** Borra un item terminado (fallido/cancelado) de la vista de la cola. */
+  eliminar(id: number): Observable<{ borrado: boolean; id: number }> {
+    return this.api.delete<{ borrado: boolean; id: number }>(`/api/cola/${id}/registro`);
+  }
+
+  /** Borra de una sola vez todos los items de los estados dados (purga de un apartado). */
+  purgar(estados: string[]): Observable<{ borrados: number }> {
+    return this.api.post<{ borrados: number }>('/api/cola/purgar', { estados });
+  }
 }

@@ -77,6 +77,7 @@ export class HomeComponent implements OnInit, OnDestroy {
   scrollLista = 0;
   // diálogo de configuración (para moverle el foco al abrir)
   @ViewChild('cfgCarta') cfgCarta!: ElementRef<HTMLDivElement>;
+  @ViewChild('colaCal') colaCal?: ElementRef<HTMLDivElement>;
   // búsqueda TMDB para agregar
   busqueda = '';
   buscando = false;
@@ -101,9 +102,19 @@ export class HomeComponent implements OnInit, OnDestroy {
   colaItems: ColaItem[] = [];
   cargandoCola = false;
   colaNuevoId = 0;
-  colaNuevaFecha = '';
+  /** Hora del día elegido en el calendario (el día sale de colaDiaSel: un solo calendario). */
+  colaNuevaHora = '';
   colaAccion = false;
   private colaTimer: number | undefined;
+  // apartados (En cola / Publicados / Fallos) + calendario de la cola
+  colaTab: 'cola' | 'publicados' | 'fallos' = 'cola';
+  colaVisibles = PASO_VISIBLES;
+  colaCalActivo = false;
+  colaDiaSel: string | null = null;
+  colaMesAnio = new Date().getFullYear();
+  colaMesMes = new Date().getMonth();
+  colaBorrando: number | null = null;
+  colaConfirmaPurga = false;
   // configuración (modal)
   cfgAbierta = false;
   cfgTab: 'resumen' | 'bots' | 'destinos' | 'conjuntos' | 'ajustes' = 'resumen';
@@ -431,11 +442,6 @@ export class HomeComponent implements OnInit, OnDestroy {
   }
   /** 42 celdas (6 semanas desde el domingo) del mes activo, con sus conteos. */
   celdasMes(): CalCelda[] {
-    const mesActivo = this.mesMes;
-    const anioActivo = this.mesAnio;
-    const primer = new Date(anioActivo, mesActivo, 1);
-    const inicio = new Date(anioActivo, mesActivo, 1 - primer.getDay());
-    const hoyClave = this.fechaClave(new Date());
     const porClave = new Map<string, { publicados: number; borradores: number; total: number }>();
     for (const t of this.itemsConPost()) {
       const f = this.fechaDeItem(t);
@@ -450,6 +456,17 @@ export class HomeComponent implements OnInit, OnDestroy {
       if (t.estado === 'publicado') e.publicados++;
       else e.borradores++;
     }
+    return this.construirCeldas(this.mesMes, this.mesAnio, this.diaSeleccionado, porClave);
+  }
+  /** Rejilla de 42 celdas: la usan el calendario del catálogo y el de la cola. */
+  private construirCeldas(
+    mesActivo: number,
+    anioActivo: number,
+    seleccionado: string | null,
+    porClave: Map<string, { publicados: number; borradores: number; total: number }>
+  ): CalCelda[] {
+    const primer = new Date(anioActivo, mesActivo, 1);
+    const hoyClave = this.fechaClave(new Date());
     const celdas: CalCelda[] = [];
     for (let i = 0; i < 42; i++) {
       const fecha = new Date(anioActivo, mesActivo, 1 - primer.getDay() + i);
@@ -461,7 +478,7 @@ export class HomeComponent implements OnInit, OnDestroy {
         num: fecha.getDate(),
         fuera: fecha.getMonth() !== mesActivo || fecha.getFullYear() !== anioActivo,
         hoy: clave === hoyClave,
-        seleccionado: clave === this.diaSeleccionado,
+        seleccionado: clave === seleccionado,
         total: cnt?.total ?? 0,
         publicados: cnt?.publicados ?? 0,
         borradores: cnt?.borradores ?? 0
@@ -554,11 +571,186 @@ export class HomeComponent implements OnInit, OnDestroy {
   }
   cerrarCola(): void {
     this.colaAbierta = false;
+    this.colaBorrando = null;
+    this.colaConfirmaPurga = false;
     if (this.colaTimer !== undefined) {
       window.clearInterval(this.colaTimer);
       this.colaTimer = undefined;
     }
     this.refrescarDatos();
+  }
+
+  // ---- apartados de la cola (En cola / Publicados / Fallos) ----
+  get colaCntCola(): number {
+    return this.colaItems.filter((i) => i.estado === 'pendiente' || i.estado === 'publicando').length;
+  }
+  get colaCntPublicados(): number {
+    return this.colaItems.filter((i) => i.estado === 'publicado').length;
+  }
+  get colaCntFallos(): number {
+    return this.colaItems.filter((i) => i.estado === 'fallo' || i.estado === 'cancelado').length;
+  }
+  elegirColaTab(tab: 'cola' | 'publicados' | 'fallos'): void {
+    if (this.colaTab === tab) return;
+    this.colaTab = tab;
+    this.colaVisibles = PASO_VISIBLES;
+    this.colaBorrando = null;
+    this.colaConfirmaPurga = false;
+  }
+  /** Items del apartado activo: pendientes primero, publicados por lo más reciente. */
+  get colaApartado(): ColaItem[] {
+    const del = (i: ColaItem): boolean =>
+      this.colaTab === 'cola'
+        ? i.estado === 'pendiente' || i.estado === 'publicando'
+        : this.colaTab === 'publicados'
+          ? i.estado === 'publicado'
+          : i.estado === 'fallo' || i.estado === 'cancelado';
+    const lista = this.colaItems.filter(del);
+    return this.colaTab === 'publicados'
+      ? lista.sort((a, b) => this.colaFechaTexto(b, 'publicado_en', 'programado_para')
+          .localeCompare(this.colaFechaTexto(a, 'publicado_en', 'programado_para')))
+      : lista.sort((a, b) => (a.programado_para ?? '').localeCompare(b.programado_para ?? ''));
+  }
+  /** Apartado filtrado por el día elegido en el calendario. El filtro sigue
+   *  activo aunque se cierre la ventana flotante (se quita con el chip o "QUITAR DÍA"). */
+  get colaFiltrados(): ColaItem[] {
+    const base = this.colaApartado;
+    if (!this.colaDiaSel) return base;
+    return base.filter((i) => {
+      const f = this.colaFechaDe(i);
+      return f !== null && this.fechaClave(f) === this.colaDiaSel;
+    });
+  }
+  get colaFilas(): ColaItem[] {
+    return this.colaFiltrados.slice(0, this.colaVisibles);
+  }
+  get colaRestantes(): number {
+    return this.colaFiltrados.length - this.colaVisibles;
+  }
+  colaVerMas(): void {
+    this.colaVisibles += PASO_VISIBLES;
+  }
+  /** Clave estable para el *ngFor: sin esto, cada refresco (20s) recreaba los
+   *  <li>, reiniciaba su animación (parpadeo) y devolvía el scroll al inicio. */
+  trackByColaId(_index: number, item: ColaItem): number {
+    return item.id;
+  }
+  /** Misma idea para las 42 celdas del mes: se reutilizan en vez de recrearse. */
+  trackByCeldaClave(_index: number, c: CalCelda): string {
+    return c.clave;
+  }
+  private colaFechaTexto(i: ColaItem, ...claves: (keyof ColaItem)[]): string {
+    for (const k of claves) {
+      const v = i[k];
+      if (typeof v === 'string' && v) return v;
+    }
+    return '';
+  }
+  /** Fecha de referencia del item: publicación hecha si existe, si no lo programado. */
+  private colaFechaDe(i: ColaItem): Date | null {
+    const iso = i.estado === 'publicado'
+      ? (i.publicado_en ?? i.programado_para ?? '')
+      : i.programado_para ?? '';
+    if (!iso) return null;
+    const d = new Date(iso);
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  // ---- calendario de la cola ----
+  get colaEtiquetaMes(): string {
+    return `${this.MESES[this.colaMesMes]} ${this.colaMesAnio}`;
+  }
+  get colaEtiquetaDia(): string {
+    if (!this.colaDiaSel) return '';
+    const [y, m, d] = this.colaDiaSel.split('-').map(Number);
+    return new Date(y, m - 1, d).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  }
+  /** Abre/cierra el único calendario (ventana flotante). El día elegido NO se
+   *  borra al cerrarlo: sirve a la vez para filtrar el listado y para programar
+   *  la próxima publicación. */
+  toggleColaCalendario(): void {
+    this.colaCalActivo = !this.colaCalActivo;
+    this.colaBorrando = null;
+    if (this.colaCalActivo) setTimeout(() => this.colaCal?.nativeElement.focus(), 0);
+  }
+  /** Cierra el calendario flotante (clic fuera o Esc). */
+  cerrarColaCalendario(): void {
+    this.colaCalActivo = false;
+  }
+  colaMesAnterior(): void {
+    this.colaMesMes--;
+    if (this.colaMesMes < 0) { this.colaMesMes = 11; this.colaMesAnio--; }
+    this.colaPreseleccionarMes();
+  }
+  colaMesSiguiente(): void {
+    this.colaMesMes++;
+    if (this.colaMesMes > 11) { this.colaMesMes = 0; this.colaMesAnio++; }
+    this.colaPreseleccionarMes();
+  }
+  colaIrHoy(): void {
+    const hoy = new Date();
+    this.colaMesAnio = hoy.getFullYear();
+    this.colaMesMes = hoy.getMonth();
+    this.colaDiaSel = this.fechaClave(hoy);
+    this.colaVisibles = PASO_VISIBLES;
+  }
+  /** Al cambiar de mes solo se recarga el contador "ver más": el día elegido
+   *  se queda como estaba, porque además de filtrar es el día de programación
+   *  y no debe saltar solo al mirar otro mes. */
+  private colaPreseleccionarMes(): void {
+    this.colaVisibles = PASO_VISIBLES;
+  }
+  /** 42 celdas del mes activo. Cuenta TODO el historial de la cola (no solo
+   *  el apartado abierto): así cualquier día con actividad se ve de un vistazo
+   *  en vez de tener que ir adivinando. El filtro de día sí aplica al apartado. */
+  colaCeldasMes(): CalCelda[] {
+    const mes = this.colaMesMes;
+    const anio = this.colaMesAnio;
+    const porClave = new Map<string, { publicados: number; borradores: number; total: number }>();
+    for (const i of this.colaItems) {
+      const f = this.colaFechaDe(i);
+      if (!f) continue;
+      let e = porClave.get(this.fechaClave(f));
+      if (!e) { e = { publicados: 0, borradores: 0, total: 0 }; porClave.set(this.fechaClave(f), e); }
+      e.total++;
+      if (i.estado === 'publicado') e.publicados++;
+      else e.borradores++;
+    }
+    return this.construirCeldas(mes, anio, this.colaDiaSel, porClave);
+  }
+  /** Fecha y hora de la nueva programación: el día lo da el calendario (un solo calendario). */
+  get colaNuevaFechaIso(): string | null {
+    if (!this.colaDiaSel || !/^\d{2}:\d{2}$/.test(this.colaNuevaHora)) return null;
+    return `${this.colaDiaSel}T${this.colaNuevaHora}`;
+  }
+  /** Texto corto del día elegido para el botón del formulario de alta. */
+  get colaDiaBoton(): string {
+    if (!this.colaDiaSel) return 'Elegir día';
+    const [y, m, d] = this.colaDiaSel.split('-').map(Number);
+    return new Date(y, m - 1, d).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' });
+  }
+  /** Cuántos registros tiene el día elegido en otro apartado (para saltar sin adivinar). */
+  colaEnDia(tab: 'cola' | 'publicados' | 'fallos'): number {
+    if (!this.colaDiaSel) return 0;
+    return this.colaItems.filter((i) => {
+      const del = tab === 'cola'
+        ? i.estado === 'pendiente' || i.estado === 'publicando'
+        : tab === 'publicados'
+          ? i.estado === 'publicado'
+          : i.estado === 'fallo' || i.estado === 'cancelado';
+      if (!del) return false;
+      const f = this.colaFechaDe(i);
+      return f !== null && this.fechaClave(f) === this.colaDiaSel;
+    }).length;
+  }
+  colaElegirDia(c: CalCelda): void {
+    this.colaDiaSel = this.colaDiaSel === c.clave ? null : c.clave;
+    this.colaVisibles = PASO_VISIBLES;
+    this.colaBorrando = null;
+  }
+  colaLimpiarDia(): void {
+    this.colaDiaSel = null;
+    this.colaVisibles = PASO_VISIBLES;
   }
   private cargarCola(): void {
     this.cargandoCola = true;
@@ -1081,7 +1273,8 @@ export class HomeComponent implements OnInit, OnDestroy {
     return this.catalogo.filter((t) => t.estado === 'borrador' && t.publicacion_id != null && !activos.has(t.publicacion_id));
   }
   programarNuevo(): void {
-    if (!this.colaNuevoId || !this.colaNuevaFecha || this.colaAccion) return;
+    const fecha = this.colaNuevaFechaIso;
+    if (!this.colaNuevoId || !fecha || this.colaAccion) return;
     const ent = this.colaNuevoAcoplamiento == null
       ? undefined
       : this.acoplamientos.find((a) => a.id === this.colaNuevoAcoplamiento);
@@ -1091,11 +1284,11 @@ export class HomeComponent implements OnInit, OnDestroy {
       return;
     }
     this.colaAccion = true;
-    this.colaService.programar(this.colaNuevoId, this.colaNuevaFecha, this.colaNuevoAcoplamiento).pipe(takeUntil(this.killed)).subscribe({
+    this.colaService.programar(this.colaNuevoId, fecha, this.colaNuevoAcoplamiento).pipe(takeUntil(this.killed)).subscribe({
       next: (item) => {
         this.colaItems = [...this.colaItems, item];
         this.colaNuevoId = 0;
-        this.colaNuevaFecha = '';
+        this.colaNuevaHora = '';
         this.colaNuevoAcoplamiento = null;
         this.colaAccion = false;
         this.snack.open('Añadido a la cola', '✓', { duration: 2500 });
@@ -1138,6 +1331,61 @@ export class HomeComponent implements OnInit, OnDestroy {
         this.cargarColaSilencioso();
       }
     });
+  }
+  /** Retira de la cola un item fallido/cancelado (primer toque pide confirmar). */
+  eliminarItemCola(item: ColaItem): void {
+    if (this.colaAccion) return;
+    if (this.colaBorrando !== item.id) {
+      this.colaBorrando = item.id;
+      return;
+    }
+    this.colaAccion = true;
+    this.colaService.eliminar(item.id).pipe(takeUntil(this.killed)).subscribe({
+      next: () => {
+        this.colaAccion = false;
+        this.colaBorrando = null;
+        this.colaItems = this.colaItems.filter((i) => i.id !== item.id);
+        this.snack.open('Retirado de la cola', '✓', { duration: 2500 });
+      },
+      error: (e: HttpErrorResponse) => {
+        this.colaAccion = false;
+        this.colaBorrando = null;
+        this.snack.open(this.api.mensajeDeError(e), 'OK', { duration: 6000 });
+        this.cargarColaSilencioso();
+      }
+    });
+  }
+  cancelarBorrarItemCola(): void {
+    this.colaBorrando = null;
+  }
+  /** Vacía el apartado abierto (los publicados se pueden purgar también por historia). */
+  purgarApartadoCola(): void {
+    if (this.colaAccion) return;
+    if (!this.colaConfirmaPurga) {
+      this.colaConfirmaPurga = true;
+      return;
+    }
+    const estados = this.colaTab === 'publicados' ? ['publicado'] : ['fallo', 'cancelado'];
+    this.colaAccion = true;
+    this.colaService.purgar(estados).pipe(takeUntil(this.killed)).subscribe({
+      next: (r) => {
+        this.colaAccion = false;
+        this.colaConfirmaPurga = false;
+        this.cargarColaSilencioso();
+        this.snack.open(
+          r.borrados === 1 ? '1 registro borrado' : `${r.borrados} registros borrados`,
+          '✓', { duration: 2500 }
+        );
+      },
+      error: (e: HttpErrorResponse) => {
+        this.colaAccion = false;
+        this.colaConfirmaPurga = false;
+        this.snack.open(this.api.mensajeDeError(e), 'OK', { duration: 6000 });
+      }
+    });
+  }
+  cancelarPurgarCola(): void {
+    this.colaConfirmaPurga = false;
   }
   etiquetaEstadoCola(e: string): string {
     const mapa: Record<string, string> = {
