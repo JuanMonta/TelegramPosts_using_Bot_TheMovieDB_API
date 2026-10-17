@@ -72,4 +72,29 @@ public class ColaController {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }
+
+    /** Borra un item terminado (fallido/cancelado) de la vista de la cola. */
+    @DeleteMapping("/{id}/registro")
+    public ResponseEntity<?> eliminar(@PathVariable Long id) {
+        try {
+            return ResponseEntity.ok(cola.eliminar(id));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    /** Purga todos los items de los estados pedidos (body: {"estados": [...]}). */
+    @PostMapping("/purgar")
+    public ResponseEntity<?> purgar(@RequestBody Map<String, Object> body) {
+        Object raw = body == null ? null : body.get("estados");
+        List<String> estados = new java.util.ArrayList<>();
+        if (raw instanceof List<?> lista) {
+            for (Object o : lista) if (o != null) estados.add(o.toString());
+        }
+        try {
+            return ResponseEntity.ok(Map.of("borrados", cola.purgar(estados)));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
 }

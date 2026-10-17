@@ -56,7 +56,7 @@ public class ColaPublicacionService implements ApplicationRunner {
 
     public static String errorCaptionLargo(long n, long limite) {
         return "El caption tiene " + n + " caracteres; Telegram permite máx. " + limite
-                + " en fotos. Acortaldo en el editor y presioná Reintentar.";
+                + " en fotos. Acórtalo en el editor y presiona Reintentar.";
     }
 
     /** Intervalo efectivo hoy (configurable desde Configuración). */
@@ -188,6 +188,43 @@ public class ColaPublicacionService implements ApplicationRunner {
         item.setError(null);
         item.setUltimoIntento(null);
         return toMap(cola.save(item));
+    }
+
+    // ---- limpieza de la vista ----
+
+    /**
+     * Borra un item ya terminado (fallido o cancelado) para que no acumule
+     * basura en la cola. Lo pendiente hay que cancelarlo antes y lo publicado
+     * se conserva como historial.
+     */
+    public Map<String, Object> eliminar(Long id) {
+        ColaPublicacion item = cola.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("El item no existe"));
+        String est = item.getEstado();
+        if (ColaPublicacion.ESTADO_PENDIENTE.equals(est) || ColaPublicacion.ESTADO_PUBLICANDO.equals(est)) {
+            throw new IllegalArgumentException("Cancela la publicación antes de borrarla de la cola.");
+        }
+        if (ColaPublicacion.ESTADO_PUBLICADO.equals(est)) {
+            throw new IllegalArgumentException("El post ya se publicó; queda como historial y no se borra.");
+        }
+        cola.delete(item);
+        log.info("Cola: item {} ({}) borrado de la vista", id, est);
+        return Map.of("borrado", true, "id", id);
+    }
+
+    /** Borra de una sola vez todos los items en los estados dados (purga de un apartado). */
+    public int purgar(List<String> estados) {
+        if (estados == null || estados.isEmpty()) throw new IllegalArgumentException("Sin estados para purgar");
+        List<String> validos = estados.stream().map(String::trim)
+                .filter(s -> ColaPublicacion.ESTADO_FALLO.equals(s)
+                        || ColaPublicacion.ESTADO_CANCELADO.equals(s)
+                        || ColaPublicacion.ESTADO_PUBLICADO.equals(s))
+                .distinct().toList();
+        if (validos.isEmpty()) throw new IllegalArgumentException("Solo se pueden purgar items fallidos, cancelados o publicados");
+        Integer borrados = tx().execute(status -> cola.purgarPorEstados(validos));
+        int n = borrados == null ? 0 : borrados;
+        log.info("Cola: purga de {} items {}", n, validos);
+        return n;
     }
 
     // ---- ejecución ----

@@ -708,26 +708,6 @@
 }
 
 /* ---------- calendario ---------- */
-.cal-mini {
-  padding: 8px 12px 12px;
-  border-bottom: 1px solid var(--hairline-soft);
-}
-.cal-mini-cab {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 6px;
-  margin-bottom: 8px;
-}
-.cal-mini-titulo {
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--text-primary);
-  padding: 4px 10px;
-  border-radius: var(--rad-chip);
-}
-.cal-mini-titulo:hover { background: var(--bg-hover); color: var(--action); }
-
 .cal-nav {
   display: grid;
   place-items: center;
@@ -779,9 +759,6 @@
 
 .cal-num { font-size: 12px; line-height: 1; }
 
-/* mini */
-.cal-celda-mini { height: 34px; gap: 3px; }
-.cal-dots { display: flex; gap: 2px; }
 .cal-dot {
   width: 5px;
   height: 5px;
@@ -831,23 +808,6 @@
   background: var(--bg-hover);
 }
 
-/* completo (legacy, se mantiene por compatibilidad si quedara vista vieja) */
-.cal-full {
-  padding: 12px 14px 6px;
-}
-.cal-full-cab {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 10px;
-}
-.cal-full-titulo {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-}
 .cal-mes {
   font-size: 15px;
   font-weight: 700;
@@ -864,16 +824,6 @@
 }
 .cal-hoy:hover { background: var(--bg-hover); }
 
-.cal-grid-full { gap: 2px; }
-.cal-celda-full {
-  min-height: 56px;
-  padding: 5px 2px 4px;
-  gap: 4px;
-  border: 1px solid transparent;
-}
-.cal-celda-full.con-posts { border-color: var(--hairline-soft); }
-.cal-celda-full .cal-num { align-self: flex-start; margin-left: 5px; font-size: 11.5px; }
-
 .cal-cnt {
   font-size: 13px;
   font-weight: 700;
@@ -885,27 +835,65 @@
 .cal-lien { display: flex; gap: 3px; }
 .cal-lien .cal-dot { width: 6px; height: 6px; }
 
-/* detalle del día */
-.cal-dia {
-  margin-top: 14px;
-  border-top: 1px solid var(--hairline-soft);
-  padding-top: 10px;
+/* ---------- calendario flotante (cola) ---------- */
+/* Se ancla bajo el botón del día y se cierra al tocar fuera. A propósito es
+   compacto: antes ocupaba casi toda la ventana y obligaba a hacer scroll. */
+/* Ancla de altura 0: no empuja ni la lista ni el pie. El -12px cancela el gap
+   del modal para que al abrir el calendario nada se desplace. */
+.cal-sep { position: relative; z-index: 60; height: 0; margin-bottom: -12px; }
+.cal-backdrop { position: fixed; inset: 0; z-index: 1; }
+.cal-pop {
+  position: absolute;
+  top: 6px;
+  right: 0;
+  z-index: 2;
+  width: 384px;
+  max-width: 100%;
+  max-height: 58vh;
+  overflow-y: auto;
+  padding: 12px 12px 10px;
+  border: 1px solid var(--hairline);
+  border-radius: 14px;
+  background: var(--bg-elevated);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.55);
 }
-.cal-dia-cab {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 0 16px 6px;
+.cal-pop:focus { outline: none; }
+.cal-pop .cal-grid { gap: 3px; }
+.cal-pop .cal-celda { min-height: 42px; padding: 4px 2px 3px; gap: 3px; border: 1px solid transparent; }
+.cal-pop .cal-celda .cal-num { align-self: flex-start; margin-left: 4px; font-size: 11px; }
+.cal-pop .cal-cnt { font-size: 12px; }
+.cal-pop .cal-lien .cal-dot { width: 5px; height: 5px; }
+.cal-pop .cal-nav { width: 26px; height: 26px; }
+
+/* día con actividad: relleno y borde azules, bien visible frente a un día vacío */
+.cal-pop .cal-celda.con-posts {
+  background: rgba(46, 166, 255, 0.18);
+  border-color: rgba(46, 166, 255, 0.55);
 }
-.cal-dia-fecha {
-  font-size: 13.5px;
-  font-weight: 600;
-  color: var(--text-primary);
-  text-transform: capitalize;
+.cal-pop .cal-celda.con-posts .cal-num { color: #fff; font-weight: 700; }
+.cal-pop .cal-celda.con-posts:hover { background: rgba(46, 166, 255, 0.3); }
+
+/* día ELEGIDO: azul sólido + borde blanco + halo. Nada que ver con el azul
+   translúcido de "con posts", para que se note sin esfuerzo. */
+.cal-pop .cal-celda.sel,
+.cal-pop .cal-celda.sel.con-posts {
+  background: var(--action);
+  border-color: #fff;
+  box-shadow: 0 0 0 2px var(--action), 0 6px 18px rgba(46, 166, 255, 0.5);
+  transform: translateY(-1px);
+  z-index: 3;
 }
-.cal-vacio {
-  padding: 20px 0;
+.cal-pop .cal-celda.sel .cal-num,
+.cal-pop .cal-celda.sel .cal-cnt { color: #fff; font-weight: 800; }
+.cal-pop .cal-celda.sel .cal-dot.pub,
+.cal-pop .cal-celda.sel .cal-dot.bnd { background: #fff; }
+.cal-pop .cal-dot-marca {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 4px;
+  background: var(--action);
+  border: 1px solid #fff;
 }
 
 /* ---------- cola de publicaciones programadas ---------- */
@@ -999,7 +987,62 @@
 .cola-alta-btn { min-height: 40px; padding: 0 18px; flex: none; }
 .cola-alta-btn:disabled { opacity: 0.45; }
 
+/* Día de programación: abre el MISMO calendario de la cola (no hay selector nativo).
+   Así se ve, al elegirlo, si ese día ya tiene posts programados. */
+.cola-dia {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex: none;
+  min-height: 40px;
+  padding: 0 12px;
+  background: var(--bg-input);
+  border: 1px solid var(--hairline);
+  border-radius: var(--rad-input);
+  color: var(--text-dimmed);
+  font-size: 0.9em;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+.cola-dia:hover { border-color: rgba(46, 166, 255, 0.45); color: var(--text-primary); }
+.cola-dia:focus-visible { outline: 2px solid rgba(46, 166, 255, 0.55); outline-offset: 2px; }
+.cola-dia.esta { color: var(--text-primary); border-color: rgba(46, 166, 255, 0.65); background: rgba(46, 166, 255, 0.08); }
+.cola-hora { width: auto; min-width: 100px; flex: none; }
+.cola-alta + .cfg-ayuda { display: block; margin: 8px 0 2px; }
+
 .cola-vacio { padding: 14px 0; text-align: center; }
+
+/* Apartados de la cola. */
+.cola-barra { display: flex; align-items: center; gap: 8px; }
+.cola-barra .cfg-tabs { flex: 1 1 auto; min-width: 0; }
+
+/* Filtro de día activo, siempre a la vista aunque el calendario esté cerrado. */
+.cola-chip-dia {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(46, 166, 255, 0.5);
+  background: rgba(46, 166, 255, 0.12);
+  color: var(--text-primary);
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.cola-chip-dia:hover { background: rgba(46, 166, 255, 0.24); }
+/* Alto fijo y más ancho: la ventana deja de encoger; solo scrollea el cuerpo.
+   Se anula el max-height de .modal-carta para poder llegar a 92vh. */
+.cola-carta { width: min(940px, 94vw); height: min(92vh, 900px); max-height: none; overflow-y: hidden; }
+@media (max-height: 620px) { .cola-carta { height: 94vh; } }
+.cola-carta ::-webkit-scrollbar { width: 10px; }
+.cola-carta ::-webkit-scrollbar-thumb { background: var(--bg-elevated); border-radius: 8px; border: 2px solid var(--bg-chat); }
+.cola-cuerpo { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding-right: 2px; }
+.cal-leyenda { display: flex; align-items: center; justify-content: center; gap: 16px; flex-wrap: wrap; margin-top: 8px; font-size: 10.5px; color: var(--text-faint); }
+.cola-saltar { display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; margin-top: 8px; }
+.cola-mas { display: flex; justify-content: center; padding-top: 4px; }
+.cola-carta .modal-pie { align-items: center; gap: 12px; flex-wrap: wrap; }
 
 .cola-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .cola-fila {
@@ -1101,8 +1144,7 @@
 .cfg-campo .cfg-input + .cfg-mini,
 .cfg-fila .cfg-input + .cfg-mini { margin-top: 0; }
 .cfg-etiqueta { font-size: 12.5px; font-weight: 600; color: var(--text-dimmed); letter-spacing: 0.2px; min-height: 2.9em; display: flex; align-items: center; }
-.cfg-input,
-.cfg-select {
+.cfg-input {
   width: 100%;
   height: 40px;
   padding: 0 11px;
@@ -1118,7 +1160,6 @@
 /* La lista nativa del desplegable la pinta el SO: sin fondo explícito sale blanca con letras blancas. */
 .cfg-input option,
 .cfg-input optgroup,
-.cfg-select option,
 .cola-select option {
   background-color: var(--bg-elevated);
   color: var(--text-primary);
@@ -1128,18 +1169,6 @@
 .cfg-numeros { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 
 .cfg-lista { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
-.cfg-lista-item {
-  display: flex; align-items: center; gap: 8px;
-  padding: 6px 10px;
-  background: var(--bg-elevated);
-  border: 1px solid var(--hairline-soft);
-  border-radius: var(--rad-chip);
-  font-size: 12.5px;
-}
-.cfg-lista-nombre { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cfg-lista-tipo { font-size: 10px; font-weight: 700; color: var(--action); letter-spacing: 0.5px; }
-.cfg-lista-tipo.test { color: #ffb85c; }
-.cfg-lista-canales { font-size: 11px; color: var(--text-dimmed); }
 .cfg-lista-vacio { color: var(--text-faint); font-size: 12px; font-style: italic; padding: 4px 0; }
 
 .cfg-token { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
@@ -1197,7 +1226,6 @@
 .cfg-guardar .spinner { border-color: rgba(255, 255, 255, 0.35); border-top-color: #fff; }
 
 /* jerarquía bot → destino → conjunto (polish: pertenencia visible) */
-.cfg-pipe-grupo { gap: 8px; }
 .cfg-pipe {
   display: flex;
   align-items: center;
