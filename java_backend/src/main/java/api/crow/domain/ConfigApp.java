@@ -37,6 +37,9 @@ public class ConfigApp {
     @Column(name = "canal_prueba_cifrado", columnDefinition = "VARBINARY(512)")
     private byte[] canalPruebaCifrado;
 
+    @Column(name = "tmdb_token_cifrado", columnDefinition = "VARBINARY(512)")
+    private byte[] tmdbTokenCifrado;
+
     @Column(name = "limite_caption_cifrado", columnDefinition = "VARBINARY(128)")
     private byte[] limiteCaptionCifrado;
 

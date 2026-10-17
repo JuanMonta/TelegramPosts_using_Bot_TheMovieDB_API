@@ -28,6 +28,7 @@ import java.util.Optional;
 public class TmdbService {
 
     private final TmdbProperties props;
+    private final ConfigService configService;
     private final TituloRepository tituloRepository;
     private final ObjectMapper objectMapper;
     private final SugerenciaService sugerenciaService;
@@ -46,7 +47,7 @@ public class TmdbService {
                         .queryParam("query", query)
                         .queryParam("include_adult", "false")
                         .build())
-                .header("Authorization", "Bearer " + props.apiKey())
+                .header("Authorization", "Bearer " + configService.tmdbToken())
                 .retrieve()
                 .body(JsonNode.class);
 
@@ -177,7 +178,7 @@ public class TmdbService {
         String ruta = path.startsWith("/") ? path : "/" + path;
         return restClient.get()
                 .uri("https://api.themoviedb.org/3" + ruta + "?language=" + props.language())
-                .header("Authorization", "Bearer " + props.apiKey())
+                .header("Authorization", "Bearer " + configService.tmdbToken())
                 .exchange((request, response) -> {
                     int status = response.getStatusCode().value();
                     if (status == 200 || status == 206) {
@@ -244,7 +245,7 @@ public class TmdbService {
     }
 
     private void checkKey() {
-        if (props.apiKey() == null || props.apiKey().isBlank())
-            throw new IllegalStateException("TMDB_API_KEY no configurada. Pégalo en application-local.yaml en app.tmdb.api-key");
+        if (configService.tmdbToken() == null || configService.tmdbToken().isBlank())
+            throw new IllegalStateException("TMDB sin token. Agrega tu token en Configuración, pestaña Ajustes.");
     }
 }

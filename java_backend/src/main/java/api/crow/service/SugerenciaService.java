@@ -48,6 +48,7 @@ public class SugerenciaService {
     private final SettingRepository settingRepository;
     private final TituloRepository tituloRepository;
     private final TmdbProperties props;
+    private final ConfigService configService;
     private final RestClient restClient = RestClient.builder()
             .baseUrl("https://api.themoviedb.org/3")
             .build();
@@ -138,7 +139,7 @@ public class SugerenciaService {
                             .queryParam("language", props.language())
                             .queryParam("page", page)
                             .build())
-                    .header("Authorization", "Bearer " + props.apiKey())
+                    .header("Authorization", "Bearer " + configService.tmdbToken())
                     .retrieve()
                     .body(JsonNode.class);
             for (JsonNode r : body.path("results")) {
@@ -169,7 +170,7 @@ public class SugerenciaService {
                                 .queryParam("query", nombre)
                                 .queryParam("include_adult", "false")
                                 .build())
-                        .header("Authorization", "Bearer " + props.apiKey())
+                        .header("Authorization", "Bearer " + configService.tmdbToken())
                         .retrieve()
                         .body(JsonNode.class);
                 for (JsonNode r : body.path("results")) {

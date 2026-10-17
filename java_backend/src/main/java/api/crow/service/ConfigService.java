@@ -1,6 +1,7 @@
 package api.crow.service;
 
 import api.crow.config.TelegramProperties;
+import api.crow.config.TmdbProperties;
 import api.crow.domain.ConfigApp;
 import api.crow.repository.ConfigAppRepository;
 import lombok.RequiredArgsConstructor;
@@ -39,16 +40,17 @@ public class ConfigService implements ApplicationRunner {
     private final ConfigAppRepository repo;
     private final ConfigCifradoService cifrado;
     private final TelegramProperties props;
+    private final TmdbProperties tmdbProps;
 
     /** true cuando algún campo de config_app no se pudo descifrar con la clave actual. */
     private volatile boolean claveInvalida = false;
 
     /** Valores descifrados de la configuración. */
-    public record Configuracion(String botToken, String canalPrincipal, String canalPrueba,
+    public record Configuracion(String botToken, String canalPrincipal, String canalPrueba, String tmdbToken,
                                 int limiteCaption, long intervaloColaMs, int colgadaMinutos) {}
 
     /** Payload de guardado: null = conservar el valor actual. */
-    public record Guardar(String botToken, String canalPrincipal, String canalPrueba,
+    public record Guardar(String botToken, String canalPrincipal, String canalPrueba, String tmdbToken,
                           Integer limiteCaption, Long intervaloColaMs, Integer colgadaMinutos) {}
 
     // ---- lectura ----
@@ -77,6 +79,12 @@ public class ConfigService implements ApplicationRunner {
         String c = cargar().canalPrueba();
         if (c != null && !c.isBlank()) return c;
         return props.testChannelId();
+    }
+
+    /** Token de TMDB efectivo (config → fallback yaml/env). */
+    public String tmdbToken() {
+        String t = cargar().tmdbToken();
+        return (t != null && !t.isBlank()) ? t : tmdbProps.apiKey();
     }
 
     public int limiteCaption() {
@@ -125,6 +133,11 @@ public class ConfigService implements ApplicationRunner {
             validarIdChat(canal, "El canal de prueba");
             c.setCanalPruebaCifrado(cifrado.cifrar(canal.isEmpty() ? null : canal));
         }
+        if (g.tmdbToken() != null) {
+            String token = g.tmdbToken().trim();
+            if (token.length() > 512) throw new IllegalArgumentException("El token de TMDB es demasiado largo (máx. 512)");
+            c.setTmdbTokenCifrado(cifrado.cifrar(token.isEmpty() ? null : token));
+        }
         if (g.limiteCaption() != null) {
             int v = g.limiteCaption();
             if (v < 1 || v > LIMITE_CAPTION_MAX) {
@@ -169,6 +182,9 @@ public class ConfigService implements ApplicationRunner {
         if (props.testChannelId() != null && !props.testChannelId().isBlank()) {
             c.setCanalPruebaCifrado(cifrado.cifrar(props.testChannelId().trim()));
         }
+        if (tmdbProps.apiKey() != null && !tmdbProps.apiKey().isBlank()) {
+            c.setTmdbTokenCifrado(cifrado.cifrar(tmdbProps.apiKey().trim()));
+        }
         c.setLimiteCaptionCifrado(cifrado.cifrar(String.valueOf(LIMITE_CAPTION_DEFECTO)));
         c.setIntervaloColaCifrado(cifrado.cifrar(String.valueOf(INTERVALO_COLA_DEFECTO_MS)));
         c.setColgadaMinCifrado(cifrado.cifrar(String.valueOf(COLGADA_DEFECTO_MIN)));
@@ -194,6 +210,7 @@ public class ConfigService implements ApplicationRunner {
                 descifrarSeguro(c.getBotTokenCifrado(), fallo),
                 descifrarSeguro(c.getCanalPrincipalCifrado(), fallo),
                 descifrarSeguro(c.getCanalPruebaCifrado(), fallo),
+                descifrarSeguro(c.getTmdbTokenCifrado(), fallo),
                 (int) entero(descifrarSeguro(c.getLimiteCaptionCifrado(), fallo), LIMITE_CAPTION_DEFECTO, 1, LIMITE_CAPTION_MAX, "límite del caption"),
                 entero(descifrarSeguro(c.getIntervaloColaCifrado(), fallo), INTERVALO_COLA_DEFECTO_MS, INTERVALO_COLA_MIN_MS, INTERVALO_COLA_MAX_MS, "intervalo de la cola"),
                 (int) entero(descifrarSeguro(c.getColgadaMinCifrado(), fallo), COLGADA_DEFECTO_MIN, 1, COLGADA_MAX_MIN, "minutos para liberar items colgados"));
@@ -226,6 +243,7 @@ public class ConfigService implements ApplicationRunner {
                 props.botToken(),
                 props.channelId(),
                 props.testChannelId(),
+                tmdbProps.apiKey(),
                 LIMITE_CAPTION_DEFECTO, INTERVALO_COLA_DEFECTO_MS, COLGADA_DEFECTO_MIN);
     }
 
@@ -259,6 +277,7 @@ public class ConfigService implements ApplicationRunner {
         if (g.botToken() != null) sb.append("token, ");
         if (g.canalPrincipal() != null) sb.append("canal principal, ");
         if (g.canalPrueba() != null) sb.append("canal de prueba, ");
+        if (g.tmdbToken() != null) sb.append("token TMDB, ");
         if (g.limiteCaption() != null) sb.append("límite caption, ");
         if (g.intervaloColaMs() != null) sb.append("intervalo cola, ");
         if (g.colgadaMinutos() != null) sb.append("min colgada, ");

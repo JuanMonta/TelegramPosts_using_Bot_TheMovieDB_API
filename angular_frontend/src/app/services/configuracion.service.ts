@@ -21,6 +21,9 @@ export interface ConfiguracionTelegram extends ConfiguracionResumen {
   bot_token_configurado: boolean;
   canal_principal: string | null;
   canal_prueba: string | null;
+  /** Token de TMDB enmascarado (nunca el valor real). */
+  tmdb_token: string | null;
+  tmdb_token_configurado: boolean;
   limite_caption: number;
   intervalo_cola_ms: number;
   colgada_minutos: number;
@@ -33,6 +36,7 @@ export interface ConfiguracionGuardado {
   bot_token?: string | null;
   canal_principal?: string | null;
   canal_prueba?: string | null;
+  tmdb_token?: string | null;
   limite_caption?: number | null;
   intervalo_cola_ms?: number | null;
   colgada_minutos?: number | null;

@@ -815,8 +815,29 @@
       <!-- cola y caption -->
       <div class="cfg-grupo" [hidden]="cfgTab !== 'ajustes'">
         <div class="cfg-panel-head">
-          <span class="cfg-panel-titulo">Ajustes: ritmo y límites</span>
-          <span class="cfg-ayuda">Estos 3 números sí necesitan GUARDAR abajo. Todo lo demás (bots, destinos, conjuntos) ya se guardó al instante.</span>
+          <span class="cfg-panel-titulo">API de TMDB</span>
+          <span class="cfg-ayuda">Sin el token de TMDB no se pueden buscar ni guardar películas y series. Se guarda cifrado al instante.</span>
+        </div>
+        <span class="tally">TOKEN DE TMDB</span>
+        <div class="cfg-campo">
+          <div class="cfg-token">
+            <span class="cfg-token-val" [class.vacio]="!cfg?.tmdb_token_configurado">
+              {{cfg?.tmdb_token_configurado ? cfg?.tmdb_token : 'Sin token configurado'}}
+            </span>
+            <button class="cfg-mini" *ngIf="!tmdbTokenEditando" (click)="reemplazarTmdb()">{{cfg?.tmdb_token_configurado ? 'REEMPLAZAR' : 'AGREGAR TOKEN'}}</button>
+            <input *ngIf="tmdbTokenEditando" class="cfg-input caret-blue" [(ngModel)]="tmdbToken" type="password" placeholder="Token de TMDB (API Read Access Token)" aria-label="Token de TMDB" (keyup.enter)="guardarCfg()" />
+            <button class="enlace" *ngIf="tmdbTokenEditando" (click)="cancelarTmdb()">CANCELAR</button>
+          </div>
+          <span class="cfg-error" *ngIf="cfgErrores['tmdb_token']">{{cfgErrores['tmdb_token']}}</span>
+          <span class="cfg-ayuda">En themoviedb.org → Configuración → API, copia el <b>API Read Access Token</b> (empieza con “eyJ…”).</span>
+        </div>
+      </div>
+
+      <!-- cola y caption -->
+      <div class="cfg-grupo" [hidden]="cfgTab !== 'ajustes'">
+        <div class="cfg-panel-head">
+          <span class="cfg-panel-titulo">Ajustes: TMDB, ritmo y límites</span>
+          <span class="cfg-ayuda">El token de TMDB y estos 3 números necesitan GUARDAR abajo. Todo lo demás (bots, destinos, conjuntos) ya se guardó al instante.</span>
         </div>
         <span class="tally">COLA Y CAPTION</span>
         <div class="cfg-numeros">

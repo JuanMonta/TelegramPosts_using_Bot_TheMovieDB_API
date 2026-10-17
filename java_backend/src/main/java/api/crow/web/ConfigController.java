@@ -42,6 +42,9 @@ public class ConfigController {
         out.put("bot_token_configurado", config.tokenBot() != null && !config.tokenBot().isBlank());
         out.put("canal_principal", config.canalPrincipal());
         out.put("canal_prueba", config.canalPrueba());
+        // Token de TMDB: solo máscara + flag (nunca el valor real)
+        out.put("tmdb_token", ConfigService.enmascarar(config.tmdbToken()));
+        out.put("tmdb_token_configurado", config.tmdbToken() != null && !config.tmdbToken().isBlank());
         out.put("limite_caption", c.limiteCaption());
         out.put("intervalo_cola_ms", c.intervaloColaMs());
         out.put("colgada_minutos", c.colgadaMinutos());
@@ -57,6 +60,7 @@ public class ConfigController {
                     texto(body, "bot_token"),
                     texto(body, "canal_principal"),
                     texto(body, "canal_prueba"),
+                    texto(body, "tmdb_token"),
                     entero(body, "limite_caption"),
                     largo(body, "intervalo_cola_ms"),
                     entero(body, "colgada_minutos"));
