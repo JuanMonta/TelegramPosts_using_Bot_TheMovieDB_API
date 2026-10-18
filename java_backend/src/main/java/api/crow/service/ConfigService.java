@@ -57,9 +57,15 @@ public class ConfigService implements ApplicationRunner {
 
     /** Lee y descifra la configuración vigente (siempre fresca desde la BD). */
     public Configuracion cargar() {
-        return repo.findById(ConfigApp.ID)
-                .map(this::descifrar)
-                .orElseGet(this::defectoConYaml);
+        try {
+            return repo.findById(ConfigApp.ID)
+                    .map(this::descifrar)
+                    .orElseGet(this::defectoConYaml);
+        } catch (Exception e) {
+            // La base de datos todavía no existe (primer arranque): no es un error
+            // fatal; se usan los valores del yaml hasta que se cree la base.
+            return defectoConYaml();
+        }
     }
 
     /** Token efectivo: el de la BD si está cargado; si no, el del yaml/env. */
@@ -171,26 +177,32 @@ public class ConfigService implements ApplicationRunner {
     /** Seed: la primera vez crea el registro con los valores del yaml. */
     @Override
     public void run(ApplicationArguments args) {
-        if (repo.findById(ConfigApp.ID).isPresent()) return;
-        ConfigApp c = nueva();
-        if (props.botToken() != null && !props.botToken().isBlank()) {
-            c.setBotTokenCifrado(cifrado.cifrar(props.botToken().trim()));
+        try {
+            if (repo.findById(ConfigApp.ID).isPresent()) return;
+            ConfigApp c = nueva();
+            if (props.botToken() != null && !props.botToken().isBlank()) {
+                c.setBotTokenCifrado(cifrado.cifrar(props.botToken().trim()));
+            }
+            if (props.channelId() != null && !props.channelId().isBlank()) {
+                c.setCanalPrincipalCifrado(cifrado.cifrar(props.channelId().trim()));
+            }
+            if (props.testChannelId() != null && !props.testChannelId().isBlank()) {
+                c.setCanalPruebaCifrado(cifrado.cifrar(props.testChannelId().trim()));
+            }
+            if (tmdbProps.apiKey() != null && !tmdbProps.apiKey().isBlank()) {
+                c.setTmdbTokenCifrado(cifrado.cifrar(tmdbProps.apiKey().trim()));
+            }
+            c.setLimiteCaptionCifrado(cifrado.cifrar(String.valueOf(LIMITE_CAPTION_DEFECTO)));
+            c.setIntervaloColaCifrado(cifrado.cifrar(String.valueOf(INTERVALO_COLA_DEFECTO_MS)));
+            c.setColgadaMinCifrado(cifrado.cifrar(String.valueOf(COLGADA_DEFECTO_MIN)));
+            c.setActualizadoEn(LocalDateTime.now());
+            repo.save(c);
+            log.info("Configuración: se creó config_app con los valores de application.yaml (cifrados)");
+        } catch (Exception e) {
+            log.warn("Configuración: no se pudo sembrar config_app todavía "
+                    + "(¿base de datos sin crear? Se puede crear desde Configuración → Datos). Detalle: {}",
+                    e.getMessage());
         }
-        if (props.channelId() != null && !props.channelId().isBlank()) {
-            c.setCanalPrincipalCifrado(cifrado.cifrar(props.channelId().trim()));
-        }
-        if (props.testChannelId() != null && !props.testChannelId().isBlank()) {
-            c.setCanalPruebaCifrado(cifrado.cifrar(props.testChannelId().trim()));
-        }
-        if (tmdbProps.apiKey() != null && !tmdbProps.apiKey().isBlank()) {
-            c.setTmdbTokenCifrado(cifrado.cifrar(tmdbProps.apiKey().trim()));
-        }
-        c.setLimiteCaptionCifrado(cifrado.cifrar(String.valueOf(LIMITE_CAPTION_DEFECTO)));
-        c.setIntervaloColaCifrado(cifrado.cifrar(String.valueOf(INTERVALO_COLA_DEFECTO_MS)));
-        c.setColgadaMinCifrado(cifrado.cifrar(String.valueOf(COLGADA_DEFECTO_MIN)));
-        c.setActualizadoEn(LocalDateTime.now());
-        repo.save(c);
-        log.info("Configuración: se creó config_app con los valores de application.yaml (cifrados)");
     }
 
     // ---- internos ----

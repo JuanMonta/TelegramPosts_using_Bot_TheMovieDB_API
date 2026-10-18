@@ -1,0 +1,360 @@
+<div class="dt">
+  <div *ngIf="cargando" class="dt-cargando">
+    <span class="spinner"></span>
+    <span class="tally">Leyendo el estado de la base de datos…</span>
+  </div>
+
+  <div *ngIf="!cargando && error" class="dt-error-caja">
+    <div class="dt-error-txt">
+      <strong>No se pudo cargar.</strong>
+      <span>{{error}}</span>
+    </div>
+    <button class="dt-mini" (click)="cargar()">REINTENTAR</button>
+  </div>
+
+  <ng-container *ngIf="!cargando && !error">
+    <div *ngIf="estado?.ocupado" class="dt-op">
+      <span class="spinner"></span>
+      <div class="dt-op-txt">
+        <span class="dt-op-titulo">{{operacionActiva}}</span>
+        <span class="dt-ayuda">No cierres la aplicación mientras esto esté en marcha.</span>
+      </div>
+    </div>
+
+    <!-- ASISTENTE DE BASE DE DATOS (primer arranque o bajo demanda) -->
+    <div class="dt-grupo dt-wiz" *ngIf="!bdDisponible || mostrarAsistente">
+      <div class="dt-head">
+        <span class="dt-titulo">Base de datos</span>
+        <span class="dt-ayuda">Aquí se prepara el lugar donde la aplicación guarda todo (títulos, videos, etc.).
+          No hace falta ser experto:
+          <span class="info-i" tabindex="0" appInfo>i<span class="dt-info-globo">Si tienes una cuenta con permisos (por ejemplo root), la app crea la base y las tablas por ti. Si tu cuenta es limitada, tú creas la base y la app crea las tablas.</span></span>
+          con una cuenta administradora la app lo hace todo sola; con una cuenta limitada, tú creas la base y la app
+          crea las tablas. Esto solo <b>crea</b>: nunca borra. Al terminar, <b>reinicia el backend</b>.</span>
+      </div>
+
+      <div class="dt-grid-2">
+        <div class="dt-campo">
+          <label class="dt-etiqueta" for="wz-host">Servidor
+            <span class="info-i" tabindex="0" appInfo>i<span class="dt-info-globo">La computadora donde está instalado MariaDB. Si está en tu misma PC, deja "localhost".</span></span>
+          </label>
+          <input id="wz-host" class="dt-input caret-blue mono" [(ngModel)]="wiz.host" placeholder="localhost" spellcheck="false" />
+        </div>
+        <div class="dt-campo">
+          <label class="dt-etiqueta" for="wz-puerto">Puerto
+            <span class="info-i" tabindex="0" appInfo>i<span class="dt-info-globo">El número del "canal" por donde se conecta. Casi siempre es 3306; no lo cambies salvo que te lo indiquen.</span></span>
+          </label>
+          <input id="wz-puerto" class="dt-input caret-blue mono" [(ngModel)]="wiz.puerto" placeholder="3306" spellcheck="false" />
+        </div>
+      </div>
+
+      <div class="dt-campo">
+        <label class="dt-etiqueta" for="wz-base">Nombre de la base de datos
+          <span class="info-i" tabindex="0" appInfo>i<span class="dt-info-globo">Es el nombre de la "caja" donde se guardará todo. Puedes inventarlo (por ejemplo canal_videos_telegram). Si ya existe, no se borra nada.</span></span>
+        </label>
+        <input id="wz-base" class="dt-input caret-blue mono" [(ngModel)]="wiz.nombre_base" placeholder="canal_videos_telegram" spellcheck="false" />
+      </div>
+
+      <div class="dt-grid-2">
+        <div class="dt-campo">
+          <label class="dt-etiqueta" for="wz-uadm">Usuario de MariaDB
+            <span class="info-i" tabindex="0" appInfo>i<span class="dt-info-globo">La cuenta con la que se conecta la app para crear la base. Si vas a crear la base desde aquí, tiene que poder crear bases (por ejemplo root).</span></span>
+          </label>
+          <input id="wz-uadm" class="dt-input caret-blue mono" [(ngModel)]="wiz.usuario_admin" placeholder="root" autocomplete="off" spellcheck="false" />
+        </div>
+        <div class="dt-campo">
+          <label class="dt-etiqueta" for="wz-padm">Contraseña de ese usuario
+            <span class="info-i" tabindex="0" appInfo>i<span class="dt-info-globo">La contraseña de esa cuenta. Si usas root, es la que pusiste al instalar MariaDB.</span></span>
+          </label>
+          <input id="wz-padm" class="dt-input caret-blue" type="password" appVerClave [(ngModel)]="wiz.password_admin" autocomplete="new-password" />
+        </div>
+      </div>
+
+      <div class="dt-grid-2">
+        <div class="dt-campo">
+          <label class="dt-etiqueta" for="wz-uapp">Usuario para la aplicación
+            <span class="info-i" tabindex="0" appInfo>i<span class="dt-info-globo">La cuenta con la que trabajará la app, aparte de la de administración. Se le da permiso solo sobre esta base. Si ya existe, se reutiliza tal cual: no se le cambia la contraseña, así que escribe la que ya tiene.</span></span>
+          </label>
+          <input id="wz-uapp" class="dt-input caret-blue mono" [(ngModel)]="wiz.usuario_app" placeholder="usuario de la app" autocomplete="off" spellcheck="false" />
+        </div>
+        <div class="dt-campo">
+          <label class="dt-etiqueta" for="wz-papp">Contraseña para esa cuenta
+            <span class="info-i" tabindex="0" appInfo>i<span class="dt-info-globo">Inventa una contraseña para la cuenta nueva y anótala.</span></span>
+          </label>
+          <input id="wz-papp" class="dt-input caret-blue" type="password" appVerClave [(ngModel)]="wiz.password_app" autocomplete="new-password" />
+        </div>
+      </div>
+      <span class="dt-ayuda" *ngIf="escA">Se creará este usuario con permisos <b>solo</b> sobre la base indicada;
+        la aplicación se conectará con él.</span>
+      <span class="dt-ayuda" *ngIf="escB">Opcional: si lo dejas vacío, la aplicación usará el mismo usuario de arriba.</span>
+      <div class="dt-aviso" *ngIf="appUserExiste">
+        El usuario <b>{{wiz.usuario_app}}</b> ya existe. La app lo reutilizará y le dará permiso sobre la base,
+        pero <b>no</b> le cambia la contraseña: escribe la que ya tiene. Si no la recuerdas, elige otro nombre
+        (por ejemplo {{wiz.usuario_app}}_app).
+      </div>
+
+      <div class="dt-acc">
+        <button class="dt-mini" (click)="probarAdmin()" [disabled]="probandoAdmin">{{probandoAdmin ? 'PROBANDO…' : 'PROBAR CONEXIÓN'}}</button>
+        <button class="dt-boton" *ngIf="escA && !baseExiste" (click)="crearBase()" [disabled]="creandoBase">{{creandoBase ? 'CREANDO…' : 'CREAR BASE DE DATOS Y TABLAS'}}</button>
+        <button class="dt-boton" *ngIf="escA && baseExiste && puedeTablas" (click)="crearTablas()" [disabled]="creandoBase">{{creandoBase ? 'CREANDO…' : 'CREAR TABLAS EN LA BASE EXISTENTE'}}</button>
+        <button class="dt-boton" *ngIf="escB && puedeTablas" (click)="crearTablas()" [disabled]="creandoBase">{{creandoBase ? 'CREANDO…' : 'CREAR LAS TABLAS'}}</button>
+      </div>
+
+      <div *ngIf="pruebaAdmin" class="dt-prueba" [class.ok]="pruebaAdmin.ok" [class.err]="!pruebaAdmin.ok">
+        <span class="dt-prueba-estado">{{pruebaAdmin.ok ? (escA ? 'Escenario A · administrador' : 'Escenario B · usuario de base') : 'No se pudo conectar'}}</span>
+        <span class="dt-prueba-det">{{pruebaAdmin.mensaje}}</span>
+        <span class="dt-prueba-det tally" *ngIf="pruebaAdmin.ok">
+          version {{pruebaAdmin.version}} · base {{pruebaAdmin.existeBase ? 'existe' : 'no existe'}}
+          <span *ngIf="escA"> · puede crear bases</span>
+          <span *ngIf="escB && puedeTablas"> · puede crear tablas</span>
+          <span *ngIf="escB && pruebaAdmin.existeBase && !puedeTablas"> · sin permiso para crear tablas</span>
+        </span>
+      </div>
+
+      <!-- Escenario B: hay que crear la base / otorgar permisos a mano -->
+      <div class="dt-sql-caja" *ngIf="escB && (!baseExiste || !puedeTablas)">
+        <span class="dt-sql-titulo">Crea la base y otorga permisos (una sola vez)</span>
+        <p class="dt-ayuda">Ejecuta esto en tu cliente de MariaDB con un usuario administrador y luego pulsa
+          <b>Probar conexión</b> otra vez.</p>
+        <pre class="dt-sql">{{sqlConfigBd}}</pre>
+        <div class="dt-acc"><button class="dt-mini" (click)="copiarSql()">COPIAR SQL</button></div>
+      </div>
+
+      <div *ngIf="creacionLista" class="dt-prueba ok">
+        <span class="dt-prueba-estado">{{creacionModo === 'tablas' ? 'Tablas creadas' : 'Base creada'}}: {{creacionLista.base}}</span>
+        <span class="dt-prueba-det tally">{{creacionLista.tablas}} tablas · {{creacionLista.host}}:{{creacionLista.puerto}} · usuario {{creacionLista.usuario_app}}</span>
+        <span class="dt-prueba-det"><b>Reinicia el backend</b> para conectarte a la base.</span>
+      </div>
+    </div>
+
+    <div class="dt-aviso" *ngIf="!bdDisponible">
+      No hay conexión con la base de datos. Créala con el asistente de arriba y reinicia el backend.
+    </div>
+
+    <ng-container *ngIf="bdDisponible">
+    <!-- CONEXIÓN -->
+    <div class="dt-grupo">
+      <div class="dt-head">
+        <span class="dt-titulo">Datos de la conexión</span>
+        <span class="dt-ayuda">Esta información es solo para mirar (no se edita aquí). Para cambiarla, usa el
+          <b>asistente de base de datos</b>.</span>
+      </div>
+      <div class="dt-grid">
+        <div class="dt-dato"><span class="dt-dato-k">Tipo
+            <span class="info-i" tabindex="0" appInfo>i<span class="dt-info-globo">El programa que guarda los datos (MariaDB).</span></span></span><span class="dt-dato-v mono">{{inventario?.motor || '—'}}</span></div>
+        <div class="dt-dato"><span class="dt-dato-k">Servidor
+            <span class="info-i" tabindex="0" appInfo>i<span class="dt-info-globo">La computadora y el puerto donde está la base de datos.</span></span></span><span class="dt-dato-v mono">{{(inventario?.host || '—') + (inventario?.puerto ? ':' + inventario?.puerto : '')}}</span></div>
+        <div class="dt-dato"><span class="dt-dato-k">Base de datos
+            <span class="info-i" tabindex="0" appInfo>i<span class="dt-info-globo">El nombre de la "caja" donde están guardados tus datos.</span></span></span><span class="dt-dato-v mono">{{inventario?.base || '—'}}</span></div>
+        <div class="dt-dato"><span class="dt-dato-k">Usuario
+            <span class="info-i" tabindex="0" appInfo>i<span class="dt-info-globo">La cuenta con la que la app se conecta todos los días.</span></span></span><span class="dt-dato-v mono">{{inventario?.usuario || '—'}}</span></div>
+        <div class="dt-dato"><span class="dt-dato-k">Conector
+            <span class="info-i" tabindex="0" appInfo>i<span class="dt-info-globo">El componente interno que usa la app para hablar con la base. No necesitas cambiarlo.</span></span></span><span class="dt-dato-v mono">{{inventario?.driver || '—'}}</span></div>
+        <div class="dt-dato"><span class="dt-dato-k">Carpeta de la app
+            <span class="info-i" tabindex="0" appInfo>i<span class="dt-info-globo">La carpeta principal del proyecto, donde la app guarda sus archivos.</span></span></span><span class="dt-dato-v mono" [title]="inventario?.raiz_app">{{inventario?.raiz_app || '—'}}</span></div>
+      </div>
+      <div class="dt-fila">
+        <button class="dt-mini" (click)="probarConexion()" [disabled]="probando">{{probando ? 'PROBANDO…' : 'PROBAR CONEXIÓN'}}</button>
+        <button class="dt-mini" (click)="abrirAsistente()">{{mostrarAsistente ? 'OCULTAR ASISTENTE' : 'ASISTENTE DE BASE DE DATOS'}}</button>
+        <span class="dt-ayuda" *ngIf="!inventario?.jdbc_disponible">No se encontró el conector de la base. Revisa el backend.</span>
+      </div>
+      <div *ngIf="prueba" class="dt-prueba" [class.ok]="prueba.ok" [class.err]="!prueba.ok">
+        <span class="dt-prueba-estado">{{prueba.ok ? 'Conexión correcta' : 'Falló la conexión'}}</span>
+        <span class="dt-prueba-det tally" *ngIf="prueba.ok">
+          version {{prueba.version}} · {{prueba.tablas}} tablas · {{tamano((prueba.tamanoMb || 0) * 1024 * 1024)}} · {{prueba.latenciaMs}} ms
+        </span>
+        <span class="dt-prueba-det" *ngIf="!prueba.ok">{{prueba.mensaje}}</span>
+      </div>
+    </div>
+
+    <!-- PROGRAMACIÓN -->
+    <div class="dt-grupo">
+      <div class="dt-head">
+        <span class="dt-titulo">Respaldos automáticos</span>
+        <span class="dt-ayuda">Un respaldo es una <b>copia de seguridad</b> de tus datos. Aquí indicas si la app la hace sola,
+          cada cuánto y dónde se guarda.</span>
+      </div>
+
+      <label class="dt-check">
+        <input type="checkbox" [(ngModel)]="cfg.auto_activo" />
+        <span>Respaldar automáticamente
+          <span class="info-i" tabindex="0" appInfo>i<span class="dt-info-globo">Si está activado, la app hace una copia de seguridad sola, sin que hagas nada.</span></span>
+        </span>
+      </label>
+
+      <div class="dt-seg" role="tablist" aria-label="Frecuencia">
+        <button class="dt-seg-btn" [class.activo]="cfg.modo === 'intervalo'" (click)="cfg.modo = 'intervalo'">Cada N horas</button>
+        <button class="dt-seg-btn" [class.activo]="cfg.modo === 'diario'" (click)="cfg.modo = 'diario'">Todos los días a una hora</button>
+      </div>
+
+      <div class="dt-grid-2">
+        <div class="dt-campo" *ngIf="cfg.modo === 'intervalo'">
+          <label class="dt-etiqueta" for="dt-intervalo">Cada cuántas horas (1–720)
+            <span class="info-i" tabindex="0" appInfo>i<span class="dt-info-globo">Cada cuántas horas se hace la copia. Por ejemplo, 24 = una copia por día.</span></span>
+          </label>
+          <input id="dt-intervalo" class="dt-input caret-blue" type="number" min="1" max="720" [(ngModel)]="cfg.intervalo_horas" />
+        </div>
+        <div class="dt-campo" *ngIf="cfg.modo === 'diario'">
+          <label class="dt-etiqueta" for="dt-hora">Hora del día (HH:mm)
+            <span class="info-i" tabindex="0" appInfo>i<span class="dt-info-globo">A qué hora del día se hace la copia (formato 24 horas, por ejemplo 03:00).</span></span>
+          </label>
+          <input id="dt-hora" class="dt-input caret-blue" type="time" [(ngModel)]="cfg.hora_diaria" />
+        </div>
+        <div class="dt-campo">
+          <label class="dt-etiqueta" for="dt-ret">Conservar los últimos (0 = todos)
+            <span class="info-i" tabindex="0" appInfo>i<span class="dt-info-globo">Cuántas copias guardar. Las más viejas se van borrando. Pon 0 para guardarlas todas.</span></span>
+          </label>
+          <input id="dt-ret" class="dt-input caret-blue" type="number" min="0" max="1000" [(ngModel)]="cfg.retencion" />
+        </div>
+      </div>
+
+      <div class="dt-campo">
+        <label class="dt-etiqueta" for="dt-dirauto">Carpeta de respaldos automáticos
+          <span class="info-i" tabindex="0" appInfo>i<span class="dt-info-globo">Carpeta donde se guardan las copias automáticas. Puedes escribirla o elegirla con el botón …</span></span>
+        </label>
+        <div class="dt-input-fila">
+          <input id="dt-dirauto" class="dt-input caret-blue mono" [(ngModel)]="cfg.dir_auto" placeholder="C:\...\backups\auto" />
+          <button class="dt-mini dt-examinar" type="button" (click)="elegirCarpeta('dir_auto')" title="Elegir carpeta del sistema" aria-label="Elegir carpeta">…</button>
+        </div>
+      </div>
+      <div class="dt-campo">
+        <label class="dt-etiqueta" for="dt-dirman">Carpeta de respaldos manuales
+          <span class="info-i" tabindex="0" appInfo>i<span class="dt-info-globo">Carpeta donde se guardan las copias que haces a mano (con el botón "RESPALDAR AHORA").</span></span>
+        </label>
+        <div class="dt-input-fila">
+          <input id="dt-dirman" class="dt-input caret-blue mono" [(ngModel)]="cfg.dir_manual" placeholder="C:\...\backups\manual" />
+          <button class="dt-mini dt-examinar" type="button" (click)="elegirCarpeta('dir_manual')" title="Elegir carpeta del sistema" aria-label="Elegir carpeta">…</button>
+        </div>
+      </div>
+      <div class="dt-campo">
+        <label class="dt-etiqueta" for="dt-bin">Carpeta bin de MariaDB (opcional)
+          <span class="info-i" tabindex="0" appInfo>i<span class="dt-info-globo">Carpeta donde están los programas de MariaDB (mariadb-dump). Déjala vacía y la app los busca sola.</span></span>
+        </label>
+        <div class="dt-input-fila">
+          <input id="dt-bin" class="dt-input caret-blue mono" [(ngModel)]="cfg.bin_dir" placeholder="(se detecta sola)" />
+          <button class="dt-mini dt-examinar" type="button" (click)="elegirCarpeta('bin_dir')" title="Elegir carpeta del sistema" aria-label="Elegir carpeta">…</button>
+        </div>
+      </div>
+
+      <div class="dt-fila dt-fila-herramientas">
+        <span class="dt-ayuda">
+          Programa para crear copias:
+          <b class="mono">{{inventario?.bin_dump || 'NO ENCONTRADO'}}</b>
+        </span>
+        <span class="dt-ayuda">
+          Programa para restaurar:
+          <b class="mono">{{inventario?.bin_cliente || 'NO ENCONTRADO'}}</b>
+        </span>
+      </div>
+      <span class="dt-ayuda" *ngIf="cfg.proximo_automatico">Próximo respaldo automático: <b>{{cfg.proximo_automatico | date:'short'}}</b>.</span>
+      <span class="dt-ayuda" *ngIf="!cfg.auto_activo">El respaldo automático está desactivado.</span>
+
+      <div class="dt-acc">
+        <button class="dt-mini dt-mini-acento" (click)="guardarConfig()" [disabled]="guardando">{{guardando ? 'GUARDANDO…' : 'GUARDAR PROGRAMACIÓN'}}</button>
+      </div>
+    </div>
+
+    <!-- ACCIONES -->
+    <div class="dt-grupo">
+      <div class="dt-head">
+        <span class="dt-titulo">Acciones</span>
+        <span class="dt-ayuda">Los respaldos se crean en segundo plano: puedes seguir usando la aplicación mientras tanto.
+          <b>Importar y restaurar</b> reemplaza tus datos actuales por los de un archivo guardado.</span>
+      </div>
+      <div class="dt-acc">
+        <button class="dt-boton" (click)="respaldarAhora()" [disabled]="!!estado?.ocupado || lanzando">{{lanzando ? 'LANZANDO…' : 'RESPALDAR AHORA'}}</button>
+        <button class="dt-mini" (click)="pedirImportar()" [disabled]="!!estado?.ocupado">IMPORTAR Y RESTAURAR…</button>
+        <button class="dt-mini" (click)="revisarIntegridad()" title="Comprueba que los respaldos estén completos. También descarta los archivos a medias que quedaron de un cierre abrupto (nunca toca respaldos completos).">REVISAR INTEGRIDAD</button>
+        <input #archivoInput type="file" accept=".sql,.gz,.sql.gz" hidden (change)="onArchivo($event)" />
+      </div>
+      <span class="dt-ayuda" *ngIf="revision">
+        Última revisión: {{revision.interrumpidos}} interrumpido(s),
+        {{revision.archivos_parciales_borrados}} archivo(s) a medias descartado(s),
+        {{revision.respaldos_sin_archivo}} respaldo(s) sin archivo.
+      </span>
+    </div>
+
+    <!-- HISTORIAL -->
+    <div class="dt-grupo">
+      <div class="dt-head">
+        <span class="dt-titulo">Actividad e historial</span>
+        <span class="dt-ayuda">Aquí ves todos los respaldos y operaciones (lo más reciente arriba). Puedes descargarlos, verificarlos o restaurarlos.</span>
+      </div>
+
+      <div class="dt-vacio" *ngIf="!lista.length">Todavía no hay respaldos. Pulsa RESPALDAR AHORA para crear el primero.</div>
+
+      <div class="dt-item" *ngFor="let r of lista; trackBy: trackId">
+        <div class="dt-item-cab">
+          <span class="dt-chip" [ngClass]="claseEstado(r.estado)">{{etiquetaEstado(r.estado)}}</span>
+          <span class="dt-item-nombre mono" [title]="r.ruta">{{r.archivo}}</span>
+          <span class="dt-item-tipo">{{etiquetaFila(r)}}</span>
+        </div>
+        <div class="dt-item-sub tally">
+          {{r.iniciado_en | date:'short'}}
+          <span *ngIf="r.terminado_en"> · {{duracion(r.duracion_ms)}}</span>
+          <span *ngIf="r.tamano_bytes != null"> · {{tamano(r.tamano_bytes)}}</span>
+          <span *ngIf="r.checksum_sha256"> · sha256 {{checksumCorto(r.checksum_sha256)}}</span>
+          <span *ngIf="!r.existe" class="dt-sin-archivo"> · archivo no encontrado en disco</span>
+        </div>
+        <div class="dt-item-msg" *ngIf="r.mensaje">{{r.mensaje}}</div>
+        <div class="dt-item-acc">
+          <a class="dt-mini" *ngIf="r.estado === 'completado' && r.existe" [href]="urlDescarga(r.id)" download>DESCARGAR</a>
+          <button class="dt-mini" *ngIf="r.estado === 'completado' && r.existe" (click)="verificar(r)">VERIFICAR</button>
+          <button class="dt-mini" *ngIf="!r.operacion && r.estado === 'completado' && r.existe" (click)="pedirRestaurar(r)" [disabled]="!!estado?.ocupado">RESTAURAR</button>
+          <button class="dt-mini dt-mini-peligro" (click)="pedirEliminar(r)" [disabled]="estado?.id_en_curso === r.id">BORRAR</button>
+        </div>
+      </div>
+    </div>
+    </ng-container>
+  </ng-container>
+
+  <!-- EXPLORADOR DE CARPETAS (botón "…") -->
+  <div class="dt-modal" *ngIf="picker.abierto">
+    <div class="dt-modal-caja dt-picker-caja" role="dialog" aria-modal="true" aria-label="Elegir carpeta">
+      <span class="dt-titulo">Elegir carpeta</span>
+      <span class="dt-ayuda">Navega hasta la carpeta que quieras y pulsa <b>Usar esta carpeta</b>.</span>
+
+      <div class="dt-picker-barra">
+        <button class="dt-mini" type="button" (click)="subirCarpeta()" [disabled]="!picker.padre" title="Subir un nivel">SUBIR</button>
+        <span class="dt-picker-ruta mono" [title]="picker.ruta">{{picker.ruta || 'Cargando…'}}</span>
+      </div>
+
+      <div class="dt-picker-atajos">
+        <button class="dt-mini" type="button" *ngFor="let s of picker.sitios" (click)="abrirRuta(s.ruta)">{{s.nombre}}</button>
+        <button class="dt-mini" type="button" *ngFor="let u of picker.unidades" (click)="abrirRuta(u.ruta)">{{u.nombre}}</button>
+      </div>
+
+      <div class="dt-picker-lista">
+        <div *ngIf="picker.cargando" class="dt-picker-vacio"><span class="spinner"></span> Abriendo…</div>
+        <div *ngIf="!picker.cargando && picker.error" class="dt-picker-vacio dt-error">{{picker.error}}</div>
+        <div *ngIf="!picker.cargando && !picker.error && !picker.carpetas.length" class="dt-picker-vacio">No hay subcarpetas aquí. Puedes usar esta carpeta.</div>
+        <button class="dt-picker-item" type="button" *ngFor="let c of picker.carpetas" (click)="abrirRuta(c.ruta)">
+          <span class="dt-picker-icono">📁</span>
+          <span class="mono">{{c.nombre}}</span>
+        </button>
+      </div>
+
+      <div class="dt-modal-pie">
+        <button class="dt-mini" type="button" (click)="cerrarPicker()">CANCELAR</button>
+        <button class="dt-boton" type="button" (click)="usarCarpeta()" [disabled]="picker.cargando || !!picker.error">USAR ESTA CARPETA</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONFIRMACIÓN DE OPERACIÓN DESTRUCTIVA -->
+  <div class="dt-modal" *ngIf="confirma">
+    <div class="dt-modal-caja" role="dialog" aria-modal="true" [attr.aria-label]="confirma.titulo">
+      <span class="dt-titulo">{{confirma.titulo}}</span>
+      <p class="dt-ayuda">{{confirma.aviso}}</p>
+      <p class="dt-ayuda" *ngIf="confirma.detalle"><b>{{confirma.detalle}}</b></p>
+      <p class="dt-ayuda">Archivo: <b class="mono">{{confirma.archivo}}</b></p>
+      <label class="dt-etiqueta" for="dt-conf">Escribe <b class="mono">{{confirma.esperado}}</b> para confirmar</label>
+      <input id="dt-conf" class="dt-input caret-blue" [(ngModel)]="confirmaTxt" (keyup.enter)="confirmar()"
+             [placeholder]="confirma.esperado" autocomplete="off" spellcheck="false" />
+      <span class="dt-error" *ngIf="confirmaError">{{confirmaError}}</span>
+      <div class="dt-modal-pie">
+        <button class="dt-mini" (click)="cancelarConfirmacion()">CANCELAR</button>
+        <button class="dt-mini dt-mini-peligro" (click)="confirmar()">{{confirma.boton}}</button>
+      </div>
+    </div>
+  </div>
+</div>

@@ -10,18 +10,24 @@ import { AppRoutingModule } from './app-routing.module';
 import { AppComponent } from './app.component';
 import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
 import { HomeComponent } from './components/home/home.component';
+import { DatosComponent } from './components/datos/datos.component';
 import { PublicacionComponent } from './components/publicacion/publicacion.component';
 import { ModoToggleComponent } from './components/modo-toggle/modo-toggle.component';
 import { TiraContextoComponent } from './components/tira-contexto/tira-contexto.component';
 import { AppRouteReuseStrategy } from './app-route-reuse.strategy';
+import { InfoDirective } from './directives/info.directive';
+import { VerClaveDirective } from './directives/ver-clave.directive';
 
 @NgModule({
   declarations: [
     AppComponent,
     HomeComponent,
+    DatosComponent,
     PublicacionComponent,
     ModoToggleComponent,
-    TiraContextoComponent
+    TiraContextoComponent,
+    InfoDirective,
+    VerClaveDirective
   ],
   imports: [
     BrowserModule,

@@ -29,7 +29,13 @@ public class PosterLimpiezaService implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
-        limpiar();
+        try {
+            limpiar();
+        } catch (Exception e) {
+            log.warn("Limpieza de pósters: no se pudo ejecutar al arrancar "
+                    + "(¿base de datos sin crear? Se puede crear desde Configuración → Datos). Detalle: {}",
+                    e.getMessage());
+        }
     }
 
     /**

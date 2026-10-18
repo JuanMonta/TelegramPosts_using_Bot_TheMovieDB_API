@@ -69,7 +69,13 @@ public class ColaPublicacionService implements ApplicationRunner {
         // Sincroniza la cola al arrancar: si la app estuvo apagada, los items
         // atrasados se publican en cuanto vuelve. El reclamo atómico evita que
         // la segunda instancia (9001) los duplique.
-        procesar();
+        try {
+            procesar();
+        } catch (Exception e) {
+            log.warn("Cola de publicaciones: no se pudo procesar al arrancar "
+                    + "(¿base de datos sin crear? Se puede crear desde Configuración → Datos). Detalle: {}",
+                    e.getMessage());
+        }
     }
 
     @Scheduled(fixedDelay = TICK_MS)

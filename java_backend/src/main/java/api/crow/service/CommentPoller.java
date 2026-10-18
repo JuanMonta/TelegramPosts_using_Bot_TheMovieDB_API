@@ -152,11 +152,16 @@ public class CommentPoller {
     }
 
     private long leerOffset() {
-        Optional<Setting> s = settingRepository.findById(CLAVE_OFFSET);
-        if (s.isEmpty()) return 0;
         try {
-            return Long.parseLong(s.get().getValor());
-        } catch (NumberFormatException e) {
+            Optional<Setting> s = settingRepository.findById(CLAVE_OFFSET);
+            if (s.isEmpty()) return 0;
+            try {
+                return Long.parseLong(s.get().getValor());
+            } catch (NumberFormatException e) {
+                return 0;
+            }
+        } catch (Exception e) {
+            // Base de datos todavía no creada (primer arranque): empezar de cero.
             return 0;
         }
     }
