@@ -33,9 +33,9 @@ export class ApiService {
       return body.error;
     }
     if (e.status === 0) {
-      return 'No se pudo conectar al backend (puerto 9000).';
+      return 'No se pudo conectar con el servicio de la aplicación.';
     }
-    return `Error ${e.status ?? ''} al llamar al backend.`.trim();
+    return `Error ${e.status ?? ''} al contactar con el servicio.`.trim();
   }
 
   private fallar<T>(e: HttpErrorResponse): Observable<never> {

@@ -291,8 +291,8 @@
     </ng-container>
 
     <ng-container *ngIf="!cargando && errorBackend">
-      <div class="escena-titulo tally">El canal espera al backend</div>
-      <p class="escena-txt dimmed">Conectá el backend en el puerto 9000 ({{errorBackend}}) y reintentá.</p>
+      <div class="escena-titulo tally">El canal espera a la aplicación</div>
+      <p class="escena-txt dimmed">No hay conexión con el servicio local ({{errorBackend}}). Vuelve a intentar.</p>
       <button class="boton-accion" (click)="cargar()">REINTENTAR CARGA</button>
     </ng-container>
 
@@ -415,8 +415,8 @@
         <option [ngValue]="0" disabled>Elige un borrador…</option>
         <option *ngFor="let t of colaBorradores()" [ngValue]="t.publicacion_id">{{t.titulo}}</option>
       </select>
-      <select class="cola-select" [(ngModel)]="colaNuevoAcoplamiento" title="Elige un acoplamiento">
-        <option [ngValue]="null">Sin acoplamiento (canal por defecto)</option>
+      <select class="cola-select" [(ngModel)]="colaNuevoAcoplamiento" title="Elige un conjunto">
+        <option [ngValue]="null">Sin conjunto (canal por defecto)</option>
         <option *ngFor="let a of acoplamientos" [ngValue]="a.id">{{a.nombre}}</option>
       </select>
       <button class="cola-dia" [class.esta]="colaDiaSel" (click)="toggleColaCalendario()" title="Elegir el día en el calendario" aria-haspopup="true" [attr.aria-expanded]="colaCalActivo">
@@ -781,7 +781,7 @@
                   <option [ngValue]="null">Sin bot asignado</option>
                   <option *ngFor="let b of bots" [ngValue]="b.id">{{b.nombre}}</option>
                 </select>
-                <button class="cfg-mini" (click)="redetectarCanalEdit()" [disabled]="!canalEditChatId.trim() || !canalEditBot || canalRedetectando || deteccionCooldown > 0" [title]="!canalEditBot ? 'Primero elige un bot' : (deteccionCooldown > 0 ? 'Enfriamiento entre detecciones' : 'Redetectar tipo')">{{canalRedetectando ? 'REDETECTANDO…' : (deteccionCooldown > 0 ? 'ESPERÁ ' + deteccionCooldown + 's' : 'REDETECTAR')}}</button>
+                <button class="cfg-mini" (click)="redetectarCanalEdit()" [disabled]="!canalEditChatId.trim() || !canalEditBot || canalRedetectando || deteccionCooldown > 0" [title]="!canalEditBot ? 'Primero elige un bot' : (deteccionCooldown > 0 ? 'Espera unos segundos antes de volver a detectar' : 'Redetectar tipo')">{{canalRedetectando ? 'REDETECTANDO…' : (deteccionCooldown > 0 ? 'ESPERA ' + deteccionCooldown + 's' : 'REDETECTAR')}}</button>
               </div>
               <span class="cfg-ayuda" *ngIf="canalEditDeteccion">{{canalEditDeteccion}}</span>
               <span class="cfg-ayuda" *ngIf="!canalEditBot && !nuevoCanalBotDetectar">Elige un bot para poder pulsar REDETECTAR.</span>
@@ -822,7 +822,7 @@
               <option [ngValue]="null">Elegir…</option>
               <option *ngFor="let b of bots" [ngValue]="b.id">{{b.nombre}}</option>
             </select>
-            <button class="cfg-mini" (click)="detectarCanal()" [disabled]="!nuevoCanalChatId.trim() || !nuevoCanalBotDetectar || detectandoCanal || deteccionCooldown > 0" [title]="!nuevoCanalBotDetectar ? 'Primero elige el bot para detectar' : (deteccionCooldown > 0 ? 'Enfriamiento entre detecciones' : 'Detectar tipo y bots administradores')">{{detectandoCanal ? 'DETECTANDO…' : (deteccionCooldown > 0 ? 'ESPERÁ ' + deteccionCooldown + 's' : 'DETECTAR')}}</button>
+            <button class="cfg-mini" (click)="detectarCanal()" [disabled]="!nuevoCanalChatId.trim() || !nuevoCanalBotDetectar || detectandoCanal || deteccionCooldown > 0" [title]="!nuevoCanalBotDetectar ? 'Primero elige el bot para detectar' : (deteccionCooldown > 0 ? 'Espera unos segundos antes de volver a detectar' : 'Detectar tipo y bots administradores')">{{detectandoCanal ? 'DETECTANDO…' : (deteccionCooldown > 0 ? 'ESPERA ' + deteccionCooldown + 's' : 'DETECTAR')}}</button>
           </div>
           <span class="cfg-ayuda" *ngIf="deteccionCanal">{{deteccionCanal}}</span>
           <div class="cfg-miembros" *ngIf="adminBotsDetectados.length">
