@@ -174,3 +174,69 @@ button {
 button:disabled { cursor: not-allowed; }
 
 img { display: block; }
+
+/* ---------- icono de ayuda "i" (globo a nivel global, nunca recortado) ---------- */
+.info-i {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  margin-left: 5px;
+  border: 1px solid var(--text-faint);
+  border-radius: 50%;
+  color: var(--text-faint);
+  font-size: 10px;
+  font-weight: 700;
+  font-style: normal;
+  line-height: 1;
+  letter-spacing: 0;
+  text-transform: none;
+  cursor: help;
+  vertical-align: middle;
+}
+.info-i:hover,
+.info-i:focus { border-color: var(--action); color: var(--action); outline: none; }
+
+.info-globo {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 200;
+  max-width: 260px;
+  padding: 8px 10px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--hairline);
+  border-radius: var(--rad-input);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
+  color: var(--text-primary);
+  font-size: 11.5px;
+  font-weight: 400;
+  line-height: 1.45;
+  text-align: left;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 120ms ease;
+  pointer-events: none;
+}
+.info-globo.visible { opacity: 1; visibility: visible; }
+
+/* El texto de ayuda vive oculto en .dt-info-globo; el globo visible lo dibuja la directiva. */
+.dt-info-globo { display: none; }
+
+/* ---------- botón "ojito" para ver/ocultar contraseñas ---------- */
+.ver-clave {
+  position: absolute;
+  z-index: 4;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border-radius: 6px;
+  color: var(--text-faint);
+  background: transparent;
+}
+.ver-clave:hover { color: var(--action); }
+.ver-clave svg { display: block; }

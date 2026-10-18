@@ -1,7 +1,9 @@
 # ------------------------------------------------------------
 # SENSIBLE
 java_backend/src/main/resources/application-local.yaml
+java_backend/config-db.yaml
 database/
+backups/
 
 # JAVA
 java_backend/target/

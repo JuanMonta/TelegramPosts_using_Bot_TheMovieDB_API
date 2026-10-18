@@ -117,7 +117,7 @@ export class HomeComponent implements OnInit, OnDestroy {
   colaConfirmaPurga = false;
   // configuración (modal)
   cfgAbierta = false;
-  cfgTab: 'resumen' | 'bots' | 'destinos' | 'conjuntos' | 'ajustes' = 'resumen';
+  cfgTab: 'resumen' | 'bots' | 'destinos' | 'conjuntos' | 'datos' | 'ajustes' = 'resumen';
   cfg: ConfiguracionTelegram | null = null;
   cfgCargando = false;
   cfgError: string | null = null;
@@ -638,6 +638,12 @@ export class HomeComponent implements OnInit, OnDestroy {
   /** Misma idea para las 42 celdas del mes: se reutilizan en vez de recrearse. */
   trackByCeldaClave(_index: number, c: CalCelda): string {
     return c.clave;
+  }
+  /** Clave estable del catálogo. Sin esto, al cerrar la cola (que refresca el
+   *  catálogo) se recreaban todas las filas y se reiniciaba su animación: el
+   *  parpadeo de toda la aplicación. */
+  trackByCatalogoId(_index: number, t: CatalogoFila): number {
+    return t.id;
   }
   private colaFechaTexto(i: ColaItem, ...claves: (keyof ColaItem)[]): string {
     for (const k of claves) {
@@ -1166,7 +1172,7 @@ export class HomeComponent implements OnInit, OnDestroy {
       error: (e: HttpErrorResponse) => this.snack.open(this.api.mensajeDeError(e), 'OK', { duration: 6000 })
     });
   }
-  elegirCfgTab(t: 'resumen' | 'bots' | 'destinos' | 'conjuntos' | 'ajustes'): void {
+  elegirCfgTab(t: 'resumen' | 'bots' | 'destinos' | 'conjuntos' | 'datos' | 'ajustes'): void {
     this.cfgTab = t;
     try { this.cfgCarta?.nativeElement.scrollTo({ top: 0 }); } catch { /* sin scroll: no-op */ }
   }

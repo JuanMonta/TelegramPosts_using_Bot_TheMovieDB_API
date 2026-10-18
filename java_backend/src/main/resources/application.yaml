@@ -14,19 +14,49 @@ spring:
   profiles:
     default: local
 
+  # Importa (si existe) el archivo con la conexión a la BD y las credenciales de
+  # administrador. Lo genera/edita el asistente de la pestaña Datos. Es un archivo
+  # aparte a propósito: NO está cifrado (se necesita antes de que exista la base
+  # de datos y antes que la clave maestra), y así se puede crear sin tocar los
+  # secretos de application-local.yaml. Si no existe, la app arranca igual y el
+  # usuario puede crear la base desde Configuración.
+  config:
+    # Se prueban varias ubicaciones porque el launcher arranca el jar desde la
+    # raíz del proyecto, pero config-db.yaml vive en java_backend/. Importar con
+    # rutas absolutas no es posible (se conocen en runtime), así que se listan las
+    # ubicaciones relativas habituales; sólo una existirá.
+    import: optional:file:./config-db.yaml,optional:file:./java_backend/config-db.yaml,optional:file:../config-db.yaml
+
   jackson:
     deserialization:
       # Permite que campos primitivos ausentes/null (ej. boolean de la HC) se
       # mapeen a su default en lugar de rechazar el payload con 400.
       fail-on-null-for-primitives: false
 
+  # El proyecto NO usa spring.sql.init (el DDL lo posee database/schema.sql). Se
+  # desactiva para que el arranque no intente conectarse a resolver el motor:
+  # así la app levanta aunque la base de datos no exista todavía.
+  sql:
+    init:
+      mode: never
+
   datasource:
-    # Base de datos canónica: la crea database/schema.sql (ejecutar una vez con
-    # `mysql -u root -p < database/schema.sql` desde la raíz del proyecto).
+    # Valores de respaldo (los reales vienen de config-db.yaml, que tiene mayor
+    # precedencia al ser importado). La base de datos NO la crea la app por su
+    # cuenta: si falta, se crea desde el asistente de Configuración → Datos.
     url: jdbc:mariadb://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:canal_videos_telegram}
-    username: ${DB_USERNAME}
-    password: ${DB_PASSWORD}
+    username: ${DB_USERNAME:}
+    password: ${DB_PASSWORD:}
     driver-class-name: org.mariadb.jdbc.Driver
+    hikari:
+      # -1 = no validar la conexión al arrancar: permite que la app levante
+      # aunque la base de datos todavía no exista (primer arranque).
+      initialization-fail-timeout: -1
+      # Si la base no está disponible, que las consultas fallen en ~1.5s en
+      # lugar de esperar 30s (default). Mantiene ágil la UI de primer arranque.
+      connection-timeout: 1500
+      # Mantiene el pool mínimo: la app no debe inundar la BD si está caída.
+      minimum-idle: 0
 
   jpa:
     # El DDL lo posee database/schema.sql (ENUM, JSON, columna generada y
@@ -39,6 +69,10 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.MariaDBDialect
         format_sql: true
+        temp:
+          # No consultar metadatos JDBC al construir el SessionFactory: así el
+          # arranque no depende de que la base exista (dialecto ya está fijado).
+          use_jdbc_metadata_defaults: false
 
   # Configuración para integración con Ollama local (Spring AI)
   ai:
@@ -47,6 +81,14 @@ spring:
       chat:
         options:
           model: ${OLLAMA_MODEL:qwen2.5-coder:7b}
+    chat:
+      memory:
+        repository:
+          jdbc:
+            # La app no usa la memoria JDBC de Spring AI; se desactiva su
+            # inicializador de esquema porque conecta a la BD al arrancar y
+            # impediría levantar la app cuando la base todavía no existe.
+            initialize-schema: never
 
 # ============================================================
 # SECRETOS / INTEGRACIONES — los valores REALES van en
