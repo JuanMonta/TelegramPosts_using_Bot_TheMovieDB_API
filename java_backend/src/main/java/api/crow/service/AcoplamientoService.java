@@ -35,7 +35,7 @@ public class AcoplamientoService {
     @Transactional
     public Map<String, Object> actualizar(Long id, String nombre) {
         Acoplamiento a = repo.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("El acoplamiento no existe"));
+                .orElseThrow(() -> new IllegalArgumentException("El conjunto no existe"));
         if (nombre != null && !nombre.isBlank()) {
             validarNombre(nombre);
             a.setNombre(nombre.trim());
@@ -46,7 +46,7 @@ public class AcoplamientoService {
     @Transactional
     public Map<String, Object> agregarCanal(Long id, Long canalId) {
         Acoplamiento a = repo.findConCanalesById(id)
-                .orElseThrow(() -> new IllegalArgumentException("El acoplamiento no existe"));
+                .orElseThrow(() -> new IllegalArgumentException("El conjunto no existe"));
         Canal c = canalRepo.findById(canalId)
                 .orElseThrow(() -> new IllegalArgumentException("El canal no existe"));
         if (a.getCanales().stream().noneMatch(x -> x.getId().equals(canalId))) {
@@ -58,7 +58,7 @@ public class AcoplamientoService {
     @Transactional
     public Map<String, Object> quitarCanal(Long id, Long canalId) {
         Acoplamiento a = repo.findConCanalesById(id)
-                .orElseThrow(() -> new IllegalArgumentException("El acoplamiento no existe"));
+                .orElseThrow(() -> new IllegalArgumentException("El conjunto no existe"));
         a.getCanales().removeIf(x -> x.getId().equals(canalId));
         return toMap(repo.save(a));
     }
@@ -66,7 +66,7 @@ public class AcoplamientoService {
     @Transactional
     public void eliminar(Long id) {
         if (!repo.existsById(id)) {
-            throw new IllegalArgumentException("El acoplamiento no existe");
+            throw new IllegalArgumentException("El conjunto no existe");
         }
         repo.deleteById(id);
     }

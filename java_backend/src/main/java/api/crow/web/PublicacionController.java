@@ -241,7 +241,7 @@ public class PublicacionController {
         long longitud = p.getCaption() == null ? 0 : p.getCaption().codePointCount(0, p.getCaption().length());
         if (longitud > limite) {
             return ResponseEntity.badRequest().body(Map.of("error",
-                    ColaPublicacionService.errorCaptionLargo(longitud, limite).replace("Acortaldo en el editor y presioná Reintentar.", "Acortá el caption antes de publicar.")));
+                    ColaPublicacionService.errorCaptionLargo(longitud, limite).replace("Acórtalo en el editor y vuelve a intentar.", "Acórtalo en el editor antes de publicar.")));
         }
         try {
             List<LinkVideo> links = linkVideoRepository.findByTituloIdOrderByOrdenAsc(p.getTitulo().getId());

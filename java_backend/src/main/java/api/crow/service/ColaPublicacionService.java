@@ -55,8 +55,8 @@ public class ColaPublicacionService implements ApplicationRunner {
     private volatile long ultimoProceso;
 
     public static String errorCaptionLargo(long n, long limite) {
-        return "El caption tiene " + n + " caracteres; Telegram permite máx. " + limite
-                + " en fotos. Acórtalo en el editor y presiona Reintentar.";
+        return "El texto tiene " + n + " caracteres; Telegram permite hasta " + limite
+                + " en fotos. Acórtalo en el editor y vuelve a intentar.";
     }
 
     /** Intervalo efectivo hoy (configurable desde Configuración). */
@@ -125,12 +125,12 @@ public class ColaPublicacionService implements ApplicationRunner {
         }
         if (acoplamientoId != null) {
             acoplamientos.findById(acoplamientoId)
-                    .orElseThrow(() -> new IllegalArgumentException("El acoplamiento no existe"));
+                    .orElseThrow(() -> new IllegalArgumentException("El conjunto no existe"));
         }
         long limite = config.limiteCaption();
         long longitud = p.getCaption() == null ? 0 : p.getCaption().codePointCount(0, p.getCaption().length());
         if (longitud > limite) {
-            throw new IllegalArgumentException("El caption supera el límite de Telegram (" + longitud + " caracteres > "
+            throw new IllegalArgumentException("El texto supera el límite de Telegram (" + longitud + " caracteres > "
                     + limite + "). Acórtalo en el editor antes de programarlo.");
         }
         ColaPublicacion item = new ColaPublicacion();
@@ -165,7 +165,7 @@ public class ColaPublicacionService implements ApplicationRunner {
         long longitud = item.getPublicacion().getCaption() == null ? 0
                 : item.getPublicacion().getCaption().codePointCount(0, item.getPublicacion().getCaption().length());
         if (longitud > limite) {
-            throw new IllegalArgumentException("El caption supera el límite de Telegram (" + longitud + " caracteres > "
+            throw new IllegalArgumentException("El texto supera el límite de Telegram (" + longitud + " caracteres > "
                     + limite + "). Acórtalo antes de reprogramarlo.");
         }
         item.setProgramadoPara(programadoPara);
@@ -187,7 +187,7 @@ public class ColaPublicacionService implements ApplicationRunner {
         long limite = config.limiteCaption();
         long longitud = p.getCaption() == null ? 0 : p.getCaption().codePointCount(0, p.getCaption().length());
         if (longitud > limite) {
-            throw new IllegalArgumentException("El caption sigue superando el límite de Telegram (" + longitud + " > "
+            throw new IllegalArgumentException("El texto sigue superando el límite de Telegram (" + longitud + " > "
                     + limite + "). Acórtalo en el editor antes de reintentar.");
         }
         item.setEstado(ColaPublicacion.ESTADO_PENDIENTE);
@@ -268,7 +268,7 @@ public class ColaPublicacionService implements ApplicationRunner {
                     c.setUltimoIntento(LocalDateTime.now());
                     cola.save(c);
                 });
-                log.warn("Cola: el item {} no cabe (caption {} caracteres)", item.getId(), longitud);
+                log.warn("Cola: el item {} no cabe (texto {} caracteres)", item.getId(), longitud);
                 return;
             }
 

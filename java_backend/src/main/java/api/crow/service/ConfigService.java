@@ -147,7 +147,7 @@ public class ConfigService implements ApplicationRunner {
         if (g.limiteCaption() != null) {
             int v = g.limiteCaption();
             if (v < 1 || v > LIMITE_CAPTION_MAX) {
-                throw new IllegalArgumentException("El límite del caption debe estar entre 1 y " + LIMITE_CAPTION_MAX);
+                throw new IllegalArgumentException("El máximo del texto debe estar entre 1 y " + LIMITE_CAPTION_MAX + " caracteres");
             }
             c.setLimiteCaptionCifrado(cifrado.cifrar(String.valueOf(v)));
         }
@@ -223,7 +223,7 @@ public class ConfigService implements ApplicationRunner {
                 descifrarSeguro(c.getCanalPrincipalCifrado(), fallo),
                 descifrarSeguro(c.getCanalPruebaCifrado(), fallo),
                 descifrarSeguro(c.getTmdbTokenCifrado(), fallo),
-                (int) entero(descifrarSeguro(c.getLimiteCaptionCifrado(), fallo), LIMITE_CAPTION_DEFECTO, 1, LIMITE_CAPTION_MAX, "límite del caption"),
+                (int) entero(descifrarSeguro(c.getLimiteCaptionCifrado(), fallo), LIMITE_CAPTION_DEFECTO, 1, LIMITE_CAPTION_MAX, "máximo del texto"),
                 entero(descifrarSeguro(c.getIntervaloColaCifrado(), fallo), INTERVALO_COLA_DEFECTO_MS, INTERVALO_COLA_MIN_MS, INTERVALO_COLA_MAX_MS, "intervalo de la cola"),
                 (int) entero(descifrarSeguro(c.getColgadaMinCifrado(), fallo), COLGADA_DEFECTO_MIN, 1, COLGADA_MAX_MIN, "minutos para liberar items colgados"));
         if (fallo[0] != claveInvalida) {
@@ -290,7 +290,7 @@ public class ConfigService implements ApplicationRunner {
         if (g.canalPrincipal() != null) sb.append("canal principal, ");
         if (g.canalPrueba() != null) sb.append("canal de prueba, ");
         if (g.tmdbToken() != null) sb.append("token TMDB, ");
-        if (g.limiteCaption() != null) sb.append("límite caption, ");
+        if (g.limiteCaption() != null) sb.append("máximo del texto, ");
         if (g.intervaloColaMs() != null) sb.append("intervalo cola, ");
         if (g.colgadaMinutos() != null) sb.append("min colgada, ");
         if (sb.length() == 0) return "sin cambios";
