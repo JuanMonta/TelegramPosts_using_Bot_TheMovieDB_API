@@ -242,7 +242,7 @@ export class DatosComponent implements OnInit, OnDestroy {
         this.creacionModo = 'base';
         this.wiz.password_admin = '';
         this.wiz.password_app = '';
-        this.avisar('Base de datos creada: ' + r.base + '. Reinicia el backend.', true);
+        this.avisar('Base de datos creada: ' + r.base + '. Reinicia la aplicación.', true);
       },
       error: (err) => {
         this.creandoBase = false;
@@ -262,7 +262,7 @@ export class DatosComponent implements OnInit, OnDestroy {
         this.creacionModo = 'tablas';
         this.wiz.password_admin = '';
         this.wiz.password_app = '';
-        this.avisar('Tablas creadas en ' + r.base + '. Reinicia el backend.', true);
+        this.avisar('Tablas creadas en ' + r.base + '. Reinicia la aplicación.', true);
       },
       error: (err) => {
         this.creandoBase = false;

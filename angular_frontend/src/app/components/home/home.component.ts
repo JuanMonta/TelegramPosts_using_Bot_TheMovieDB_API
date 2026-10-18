@@ -1083,7 +1083,7 @@ export class HomeComponent implements OnInit, OnDestroy {
   }
   etiquetaAcoplamientosDeCanal(canalId: number): string {
     const lista = this.acoplamientosDeCanal(canalId);
-    if (!lista.length) return 'Sin acoplamiento';
+    if (!lista.length) return 'Sin conjunto';
     return lista.map((a) => a.nombre).join(' · ');
   }
   agregarAcoplamiento(): void {
@@ -1145,7 +1145,7 @@ export class HomeComponent implements OnInit, OnDestroy {
       next: (act) => {
         this.acoplamientos = this.acoplamientos.map((x) => (x.id === act.id ? act : x));
         this.cancelarRenombrarAcoplamiento();
-        this.snack.open('Acoplamiento renombrado', '✓', { duration: 2500 });
+        this.snack.open('Conjunto renombrado', '✓', { duration: 2500 });
       },
       error: (e: HttpErrorResponse) => this.snack.open(this.api.mensajeDeError(e), 'OK', { duration: 6000 })
     });
@@ -1210,7 +1210,7 @@ export class HomeComponent implements OnInit, OnDestroy {
     const errores: Record<string, string> = {};
     if (this.cfgTokenEditando) {
       const t = this.cfgToken.trim();
-      if (!t) errores['bot_token'] = 'Pegá un token o cancelá el reemplazo.';
+      if (!t) errores['bot_token'] = 'Pega un token o cancela el reemplazo.';
       else if (t.length > 512) errores['bot_token'] = 'El token es demasiado largo (máx. 512).';
     }
     if (this.tmdbTokenEditando) {
@@ -1230,15 +1230,15 @@ export class HomeComponent implements OnInit, OnDestroy {
     }
     const limite = Number(cfg.limite_caption);
     if (!Number.isInteger(limite) || limite < 1 || limite > 4096) {
-      errores['limite_caption'] = 'El límite del caption debe estar entre 1 y 4096.';
+      errores['limite_caption'] = 'El máximo del texto debe estar entre 1 y 4096 caracteres.';
     }
     const seg = Number(this.cfgIntervaloSeg);
     if (!Number.isFinite(seg) || seg < 1 || seg > 3600) {
-      errores['intervalo_cola_ms'] = 'El intervalo de la cola debe estar entre 1s y 60min.';
+      errores['intervalo_cola_ms'] = 'Cada cuánto revisa la cola debe estar entre 1 segundo y 60 minutos.';
     }
     const colgada = Number(cfg.colgada_minutos);
     if (!Number.isInteger(colgada) || colgada < 1 || colgada > 1440) {
-      errores['colgada_minutos'] = 'Los minutos para liberar items colgados deben estar entre 1 y 1440.';
+      errores['colgada_minutos'] = 'Los minutos para reintentar publicaciones trabadas deben estar entre 1 y 1440.';
     }
     this.cfgErrores = errores;
     if (Object.keys(errores).length) return;

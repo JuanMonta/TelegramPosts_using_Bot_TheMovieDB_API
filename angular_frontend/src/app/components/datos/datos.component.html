@@ -29,7 +29,7 @@
           No hace falta ser experto:
           <span class="info-i" tabindex="0" appInfo>i<span class="dt-info-globo">Si tienes una cuenta con permisos (por ejemplo root), la app crea la base y las tablas por ti. Si tu cuenta es limitada, tú creas la base y la app crea las tablas.</span></span>
           con una cuenta administradora la app lo hace todo sola; con una cuenta limitada, tú creas la base y la app
-          crea las tablas. Esto solo <b>crea</b>: nunca borra. Al terminar, <b>reinicia el backend</b>.</span>
+          crea las tablas. Esto solo <b>crea</b>: nunca borra. Al terminar, <b>reinicia la aplicación</b>.</span>
       </div>
 
       <div class="dt-grid-2">
@@ -122,12 +122,12 @@
       <div *ngIf="creacionLista" class="dt-prueba ok">
         <span class="dt-prueba-estado">{{creacionModo === 'tablas' ? 'Tablas creadas' : 'Base creada'}}: {{creacionLista.base}}</span>
         <span class="dt-prueba-det tally">{{creacionLista.tablas}} tablas · {{creacionLista.host}}:{{creacionLista.puerto}} · usuario {{creacionLista.usuario_app}}</span>
-        <span class="dt-prueba-det"><b>Reinicia el backend</b> para conectarte a la base.</span>
+        <span class="dt-prueba-det"><b>Reinicia la aplicación</b> para conectarte a la base.</span>
       </div>
     </div>
 
     <div class="dt-aviso" *ngIf="!bdDisponible">
-      No hay conexión con la base de datos. Créala con el asistente de arriba y reinicia el backend.
+      No hay conexión con la base de datos. Créala con el asistente de arriba y reinicia la aplicación.
     </div>
 
     <ng-container *ngIf="bdDisponible">
@@ -155,7 +155,7 @@
       <div class="dt-fila">
         <button class="dt-mini" (click)="probarConexion()" [disabled]="probando">{{probando ? 'PROBANDO…' : 'PROBAR CONEXIÓN'}}</button>
         <button class="dt-mini" (click)="abrirAsistente()">{{mostrarAsistente ? 'OCULTAR ASISTENTE' : 'ASISTENTE DE BASE DE DATOS'}}</button>
-        <span class="dt-ayuda" *ngIf="!inventario?.jdbc_disponible">No se encontró el conector de la base. Revisa el backend.</span>
+        <span class="dt-ayuda" *ngIf="!inventario?.jdbc_disponible">No se encontró el conector de la base de datos. Revisa la instalación.</span>
       </div>
       <div *ngIf="prueba" class="dt-prueba" [class.ok]="prueba.ok" [class.err]="!prueba.ok">
         <span class="dt-prueba-estado">{{prueba.ok ? 'Conexión correcta' : 'Falló la conexión'}}</span>
