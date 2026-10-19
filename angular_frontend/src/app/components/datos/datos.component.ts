@@ -8,6 +8,9 @@ import {
   DatosInventario,
   DatosService,
   EstadoRespaldos,
+  MigracionAnalisis,
+  MigracionPayload,
+  MigracionResultado,
   PruebaAdmin,
   PruebaConexion,
   Respaldo,
@@ -31,7 +34,7 @@ interface Confirmacion {
 }
 
 /** Campo de carpeta que se puede elegir con el explorador. */
-type DestinoRuta = 'dir_auto' | 'dir_manual' | 'bin_dir';
+type DestinoRuta = 'dir_auto' | 'dir_manual' | 'bin_dir' | 'archivo_bd' | 'archivo_mig';
 
 interface Picker {
   abierto: boolean;
@@ -106,6 +109,8 @@ export class DatosComponent implements OnInit, OnDestroy {
   boot: BootstrapAdmin | null = null;
   mostrarAsistente = false;
   wiz: BootstrapPayload = {
+    motor: 'sqlite',
+    archivo: '',
     host: 'localhost',
     puerto: '3306',
     nombre_base: '',
@@ -119,6 +124,29 @@ export class DatosComponent implements OnInit, OnDestroy {
   creandoBase = false;
   creacionLista: CrearBaseResultado | null = null;
   creacionModo: 'base' | 'tablas' | null = null;
+  /** El usuario confirma crear una base vacía en OTRO motor (empezar de cero, sin migrar). */
+  cambioMotorConfirmado = false;
+
+  // ---- migración asistida de motor ----
+  migrarAbierto = false;
+  mig: BootstrapPayload = {
+    motor: 'sqlite',
+    archivo: '',
+    host: 'localhost',
+    puerto: '3306',
+    nombre_base: '',
+    usuario_admin: '',
+    password_admin: '',
+    usuario_app: '',
+    password_app: ''
+  };
+  migAnalisis: MigracionAnalisis | null = null;
+  migResultado: MigracionResultado | null = null;
+  migAnalizando = false;
+  migrando = false;
+  vaciarDestino = false;
+  migConfirma = '';
+  migConfirmaError = '';
 
   private timer?: number;
 
@@ -173,6 +201,8 @@ export class DatosComponent implements OnInit, OnDestroy {
   private initWiz(b: BootstrapAdmin | null): void {
     if (!b) return;
     this.wiz = {
+      motor: b.motor || 'sqlite',
+      archivo: b.archivo || '',
       host: b.host || 'localhost',
       puerto: b.puerto || '3306',
       nombre_base: b.nombre_base || '',
@@ -181,6 +211,161 @@ export class DatosComponent implements OnInit, OnDestroy {
       usuario_app: b.usuario_app || '',
       password_app: ''
     };
+  }
+
+  /** Etiqueta legible del motor elegido en el asistente. */
+  get motorEtiqueta(): string {
+    if (this.wiz.motor === 'sqlite') return 'SQLite';
+    return this.wiz.motor === 'mysql' ? 'MySQL' : 'MariaDB';
+  }
+
+  /** true para motores de servidor (piden host, puerto y credenciales). */
+  get motorEsServidor(): boolean {
+    return this.wiz.motor !== 'sqlite';
+  }
+
+  /** true si la base de datos activa es un servidor (no un archivo). */
+  get inventarioEsServidor(): boolean {
+    return this.inventario?.es_servidor !== false;
+  }
+
+  /** Motor que la aplicación está usando AHORA (etiqueta legible). */
+  get motorActivo(): string {
+    return this.inventario?.motor_etiqueta || this.inventario?.motor || '—';
+  }
+
+  /** true si el asistente apunta a un motor distinto del que está en uso. */
+  get cambioDeMotor(): boolean {
+    return this.bdDisponible && !!this.inventario && !!this.wiz.motor && this.wiz.motor !== this.inventario.motor;
+  }
+
+  /** Etiqueta del motor de destino de la migración. */
+  get migMotorEtiqueta(): string {
+    if (this.mig.motor === 'sqlite') return 'SQLite';
+    return this.mig.motor === 'mysql' ? 'MySQL' : 'MariaDB';
+  }
+
+  /** true para motores de servidor (piden host, puerto y credenciales). */
+  get migEsServidor(): boolean {
+    return this.mig.motor !== 'sqlite';
+  }
+
+  /** Nombre que hay que escribir para confirmar la migración (la base actual). */
+  get migEsperado(): string {
+    return this.inventario?.base || this.cfg.nombre_base_datos || '';
+  }
+
+  /** Cambia el motor de la base de datos del asistente y reinicia la prueba. */
+  setMotor(motor: string): void {
+    if (this.wiz.motor === motor) return;
+    this.wiz.motor = motor;
+    if (motor === 'sqlite') {
+      this.wiz.puerto = '0';
+    } else if (!this.wiz.puerto || this.wiz.puerto === '0') {
+      // Los motores de servidor comparten el puerto 3306.
+      this.wiz.puerto = '3306';
+    }
+    this.pruebaAdmin = null;
+    this.creacionLista = null;
+    this.creacionModo = null;
+    this.cambioMotorConfirmado = false;
+  }
+
+  // ---- migración asistida de motor ----
+
+  /** Abre/cierra la sección de migración y la prepara con el motor opuesto al actual. */
+  abrirMigracion(): void {
+    this.migrarAbierto = !this.migrarAbierto;
+    if (this.migrarAbierto) {
+      const activo = this.inventario?.motor || 'mariadb';
+      this.mig = {
+        motor: activo === 'sqlite' ? 'mariadb' : 'sqlite',
+        archivo: '',
+        host: 'localhost',
+        puerto: '3306',
+        nombre_base: '',
+        usuario_admin: '',
+        password_admin: '',
+        usuario_app: '',
+        password_app: ''
+      };
+      this.migAnalisis = null;
+      this.migResultado = null;
+      this.vaciarDestino = false;
+      this.migConfirma = '';
+      this.migConfirmaError = '';
+    }
+  }
+
+  setMigMotor(motor: string): void {
+    if (this.mig.motor === motor) return;
+    this.mig.motor = motor;
+    if (motor === 'sqlite') {
+      this.mig.puerto = '0';
+    } else if (!this.mig.puerto || this.mig.puerto === '0') {
+      this.mig.puerto = '3306';
+    }
+    this.migAnalisis = null;
+    this.migResultado = null;
+  }
+
+  /** Analiza origen y destino (sin tocar nada) antes de migrar. */
+  analizarMigracion(): void {
+    if (this.estado?.ocupado) {
+      this.avisar('Hay una operación en curso. Espera a que termine.', false);
+      return;
+    }
+    this.migAnalizando = true;
+    this.migAnalisis = null;
+    this.migResultado = null;
+    this.datos.analizarMigracion(this.mig).subscribe({
+      next: (a) => {
+        this.migAnalizando = false;
+        this.migAnalisis = a;
+        if (!a.ok) this.avisar(a.mensaje || 'No se pudo analizar el destino.', false);
+      },
+      error: (err) => {
+        this.migAnalizando = false;
+        this.avisar(this.api.mensajeDeError(err), false);
+      }
+    });
+  }
+
+  /** Migra los datos al motor destino, verifica y (si cuadra) cambia la conexión. */
+  migrarAhora(): void {
+    if (this.estado?.ocupado) {
+      this.avisar('Hay una operación en curso. Espera a que termine.', false);
+      return;
+    }
+    if (!this.migAnalisis || !this.migAnalisis.ok) {
+      this.avisar('Primero pulsa COMPROBAR DESTINO.', false);
+      return;
+    }
+    const esperado = this.migEsperado;
+    const escrito = (this.migConfirma || '').trim();
+    if (escrito.toLowerCase() !== esperado.toLowerCase()) {
+      this.migConfirmaError = `Escribe exactamente: ${esperado}`;
+      return;
+    }
+    this.migConfirmaError = '';
+    this.migrando = true;
+    this.migResultado = null;
+    const payload: MigracionPayload = { ...this.mig, vaciar_destino: this.vaciarDestino, confirmacion: escrito };
+    this.datos.migrarMotores(payload).subscribe({
+      next: (r) => {
+        this.migrando = false;
+        this.migResultado = r;
+        if (r.correcto) {
+          this.avisar('Migración completada y verificada. Reinicia la aplicación.', true);
+        } else {
+          this.avisar(r.mensaje || 'La migración no se completó.', false);
+        }
+      },
+      error: (err) => {
+        this.migrando = false;
+        this.avisar(this.api.mensajeDeError(err), false);
+      }
+    });
   }
 
   abrirAsistente(): void {
@@ -235,7 +420,7 @@ export class DatosComponent implements OnInit, OnDestroy {
   crearBase(): void {
     this.creandoBase = true;
     this.creacionLista = null;
-    this.datos.crearBase(this.wiz).subscribe({
+    this.datos.crearBase({ ...this.wiz, cambio_motor_confirmado: this.cambioMotorConfirmado }).subscribe({
       next: (r) => {
         this.creandoBase = false;
         this.creacionLista = r;
@@ -255,7 +440,7 @@ export class DatosComponent implements OnInit, OnDestroy {
   crearTablas(): void {
     this.creandoBase = true;
     this.creacionLista = null;
-    this.datos.crearTablas(this.wiz).subscribe({
+    this.datos.crearTablas({ ...this.wiz, cambio_motor_confirmado: this.cambioMotorConfirmado }).subscribe({
       next: (r) => {
         this.creandoBase = false;
         this.creacionLista = r;
@@ -333,6 +518,10 @@ export class DatosComponent implements OnInit, OnDestroy {
   // ---- configuración ----
 
   guardarConfig(): void {
+    if (this.estado?.ocupado) {
+      this.avisar('Hay una operación en curso. Espera a que termine para cambiar la programación.', false);
+      return;
+    }
     this.guardando = true;
     const payload = {
       auto_activo: this.cfg.auto_activo,
@@ -362,8 +551,18 @@ export class DatosComponent implements OnInit, OnDestroy {
 
   /** Abre el explorador para elegir una carpeta y asignarla al campo indicado. */
   elegirCarpeta(destino: DestinoRuta): void {
-    this.picker = { ...PICKER_CERRADO, abierto: true, destino, cargando: true, ruta: (this.cfg[destino] || '').trim() };
+    const inicial = destino === 'archivo_bd' ? this.carpetaDe(this.wiz.archivo)
+      : destino === 'archivo_mig' ? this.carpetaDe(this.mig.archivo)
+      : (this.cfg[destino] || '');
+    this.picker = { ...PICKER_CERRADO, abierto: true, destino, cargando: true, ruta: inicial.trim() };
     this.abrirRuta(this.picker.ruta);
+  }
+
+  /** Carpeta que contiene una ruta de archivo (o cadena vacía). */
+  private carpetaDe(ruta: string): string {
+    const s = (ruta || '').replace(/[\\/]+$/, '');
+    const i = Math.max(s.lastIndexOf('\\'), s.lastIndexOf('/'));
+    return i > 0 ? s.substring(0, i) : '';
   }
 
   abrirRuta(ruta: string): void {
@@ -391,8 +590,19 @@ export class DatosComponent implements OnInit, OnDestroy {
 
   /** Confirma la carpeta que está abierta en el explorador. */
   usarCarpeta(): void {
-    if (!this.picker.destino) return;
-    this.cfg[this.picker.destino] = this.picker.ruta;
+    const destino = this.picker.destino;
+    if (!destino) return;
+    if (destino === 'archivo_bd') {
+      const sep = this.picker.ruta.includes('\\') ? '\\' : '/';
+      this.wiz.archivo = this.picker.ruta.replace(/[\\/]+$/, '') + sep + 'canal_videos_telegram.db';
+    } else if (destino === 'archivo_mig') {
+      const sep = this.picker.ruta.includes('\\') ? '\\' : '/';
+      this.mig.archivo = this.picker.ruta.replace(/[\\/]+$/, '') + sep + 'canal_videos_telegram.db';
+      this.migAnalisis = null;
+      this.migResultado = null;
+    } else {
+      this.cfg[destino] = this.picker.ruta;
+    }
     this.cerrarPicker();
   }
 
@@ -430,6 +640,10 @@ export class DatosComponent implements OnInit, OnDestroy {
   }
 
   revisarIntegridad(): void {
+    if (this.estado?.ocupado) {
+      this.avisar('Hay una operación en curso. Espera a que termine para revisar la integridad.', false);
+      return;
+    }
     this.datos.revisarIntegridad().subscribe({
       next: (rev) => {
         this.revision = rev;
@@ -447,6 +661,10 @@ export class DatosComponent implements OnInit, OnDestroy {
   // ---- confirmación (operaciones destructivas) ----
 
   pedirRestaurar(r: Respaldo): void {
+    if (this.estado?.ocupado) {
+      this.avisar('Hay una operación en curso. Espera a que termine antes de restaurar.', false);
+      return;
+    }
     const base = this.cfg.nombre_base_datos || '';
     this.confirma = {
       accion: 'restaurar',
@@ -466,6 +684,10 @@ export class DatosComponent implements OnInit, OnDestroy {
   }
 
   pedirEliminar(r: Respaldo): void {
+    if (this.estado?.ocupado) {
+      this.avisar('Hay una operación en curso. Espera a que termine antes de borrar.', false);
+      return;
+    }
     this.confirma = {
       accion: 'eliminar',
       id: r.id,
@@ -482,6 +704,10 @@ export class DatosComponent implements OnInit, OnDestroy {
   }
 
   pedirImportar(): void {
+    if (this.estado?.ocupado) {
+      this.avisar('Hay una operación en curso. Espera a que termine antes de importar.', false);
+      return;
+    }
     this.archivoInput?.nativeElement.click();
   }
 
@@ -491,8 +717,8 @@ export class DatosComponent implements OnInit, OnDestroy {
     input.value = '';
     if (!f) return;
     const bajo = f.name.toLowerCase();
-    if (!bajo.endsWith('.sql') && !bajo.endsWith('.gz')) {
-      this.avisar('El archivo debe ser .sql o .sql.gz', false);
+    if (!bajo.endsWith('.sql') && !bajo.endsWith('.gz') && !bajo.endsWith('.db') && !bajo.endsWith('.sqlite')) {
+      this.avisar('El archivo debe ser un respaldo (.sql.gz, .db.gz, .sql, .db o .sqlite)', false);
       return;
     }
     this.archivoImportar = f;

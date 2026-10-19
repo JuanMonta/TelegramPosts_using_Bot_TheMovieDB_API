@@ -30,6 +30,7 @@ public class EsquemaRespaldoArranque implements ApplicationRunner {
 
     private final JdbcTemplate jdbc;
     private final RespaldoService respaldos;
+    private final BaseDatosService db;
 
     private static final String DDL_RESPALDOS = """
             CREATE TABLE IF NOT EXISTS respaldos (
@@ -73,14 +74,20 @@ public class EsquemaRespaldoArranque implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
-        try {
-            jdbc.execute(DDL_RESPALDOS);
-            jdbc.execute(DDL_CONFIG);
-        } catch (Exception e) {
-            log.error("No se pudieron preparar las tablas del módulo de respaldos. "
-                    + "Aplica database/schema.sql o database/migracion_respaldos.sql a mano. Detalle: {}",
-                    e.getMessage());
-            return;
+        if (db.esArchivo()) {
+            // Motores de archivo (SQLite): las tablas ya vienen de schema-sqlite.sql
+            // (creadas por BootstrapBaseDatos) y el DDL de abajo es sintaxis MariaDB.
+            log.debug("Motor de archivo: se omite el DDL del módulo de respaldos (lo aporta schema-sqlite.sql).");
+        } else {
+            try {
+                jdbc.execute(DDL_RESPALDOS);
+                jdbc.execute(DDL_CONFIG);
+            } catch (Exception e) {
+                log.error("No se pudieron preparar las tablas del módulo de respaldos. "
+                        + "Aplica database/schema.sql o database/migracion_respaldos.sql a mano. Detalle: {}",
+                        e.getMessage());
+                return;
+            }
         }
         try {
             Map<String, Object> r = respaldos.revisarIntegridad();

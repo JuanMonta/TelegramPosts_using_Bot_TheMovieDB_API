@@ -32,10 +32,41 @@
           crea las tablas. Esto solo <b>crea</b>: nunca borra. Al terminar, <b>reinicia la aplicación</b>.</span>
       </div>
 
-      <div class="dt-grid-2">
+      <div class="dt-campo">
+        <label class="dt-etiqueta">Tipo de base de datos</label>
+        <div class="dt-motores">
+          <button type="button" class="dt-motor" [class.sel]="wiz.motor === 'sqlite'" (click)="setMotor('sqlite')">
+            <span class="dt-motor-t">SQLite</span>
+            <span class="dt-motor-d">Recomendado. No necesitas instalar nada.</span>
+          </button>
+          <button type="button" class="dt-motor" [class.sel]="wiz.motor === 'mariadb'" (click)="setMotor('mariadb')">
+            <span class="dt-motor-t">MariaDB</span>
+            <span class="dt-motor-d">Si ya tienes MariaDB instalado.</span>
+          </button>
+          <button type="button" class="dt-motor" [class.sel]="wiz.motor === 'mysql'" (click)="setMotor('mysql')">
+            <span class="dt-motor-t">MySQL 8</span>
+            <span class="dt-motor-d">Si tienes MySQL 8 instalado.</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- SQLite: todo vive en un solo archivo -->
+      <div class="dt-campo" *ngIf="!motorEsServidor">
+        <label class="dt-etiqueta" for="wz-archivo">Archivo de la base de datos
+          <span class="info-i" tabindex="0" appInfo>i<span class="dt-info-globo">Todo se guarda en un único archivo. Puedes escribir la ruta completa o elegir la carpeta con el botón … y la app le pone el nombre del archivo.</span></span>
+        </label>
+        <div class="dt-input-fila">
+          <input id="wz-archivo" class="dt-input caret-blue mono" [(ngModel)]="wiz.archivo" placeholder="C:\...\database\canal_videos_telegram.db" spellcheck="false" />
+          <button class="dt-mini dt-examinar" type="button" (click)="elegirCarpeta('archivo_bd')" title="Elegir carpeta del sistema" aria-label="Elegir carpeta">…</button>
+        </div>
+        <span class="dt-ayuda">Si el archivo ya existe con datos, se reutiliza tal cual (no se borra nada). Si no existe, se crea
+          con las tablas listas.</span>
+      </div>
+
+      <div class="dt-grid-2" *ngIf="motorEsServidor">
         <div class="dt-campo">
           <label class="dt-etiqueta" for="wz-host">Servidor
-            <span class="info-i" tabindex="0" appInfo>i<span class="dt-info-globo">La computadora donde está instalado MariaDB. Si está en tu misma PC, deja "localhost".</span></span>
+            <span class="info-i" tabindex="0" appInfo>i<span class="dt-info-globo">La computadora donde está instalado el servidor de base de datos ({{motorEtiqueta}}). Si está en tu misma PC, deja "localhost".</span></span>
           </label>
           <input id="wz-host" class="dt-input caret-blue mono" [(ngModel)]="wiz.host" placeholder="localhost" spellcheck="false" />
         </div>
@@ -47,29 +78,29 @@
         </div>
       </div>
 
-      <div class="dt-campo">
+      <div class="dt-campo" *ngIf="motorEsServidor">
         <label class="dt-etiqueta" for="wz-base">Nombre de la base de datos
           <span class="info-i" tabindex="0" appInfo>i<span class="dt-info-globo">Es el nombre de la "caja" donde se guardará todo. Puedes inventarlo (por ejemplo canal_videos_telegram). Si ya existe, no se borra nada.</span></span>
         </label>
         <input id="wz-base" class="dt-input caret-blue mono" [(ngModel)]="wiz.nombre_base" placeholder="canal_videos_telegram" spellcheck="false" />
       </div>
 
-      <div class="dt-grid-2">
+      <div class="dt-grid-2" *ngIf="motorEsServidor">
         <div class="dt-campo">
-          <label class="dt-etiqueta" for="wz-uadm">Usuario de MariaDB
+          <label class="dt-etiqueta" for="wz-uadm">Usuario de {{motorEtiqueta}}
             <span class="info-i" tabindex="0" appInfo>i<span class="dt-info-globo">La cuenta con la que se conecta la app para crear la base. Si vas a crear la base desde aquí, tiene que poder crear bases (por ejemplo root).</span></span>
           </label>
           <input id="wz-uadm" class="dt-input caret-blue mono" [(ngModel)]="wiz.usuario_admin" placeholder="root" autocomplete="off" spellcheck="false" />
         </div>
         <div class="dt-campo">
           <label class="dt-etiqueta" for="wz-padm">Contraseña de ese usuario
-            <span class="info-i" tabindex="0" appInfo>i<span class="dt-info-globo">La contraseña de esa cuenta. Si usas root, es la que pusiste al instalar MariaDB.</span></span>
+            <span class="info-i" tabindex="0" appInfo>i<span class="dt-info-globo">La contraseña de esa cuenta. Si usas root, es la que pusiste al instalar {{motorEtiqueta}}.</span></span>
           </label>
           <input id="wz-padm" class="dt-input caret-blue" type="password" appVerClave [(ngModel)]="wiz.password_admin" autocomplete="new-password" />
         </div>
       </div>
 
-      <div class="dt-grid-2">
+      <div class="dt-grid-2" *ngIf="motorEsServidor">
         <div class="dt-campo">
           <label class="dt-etiqueta" for="wz-uapp">Usuario para la aplicación
             <span class="info-i" tabindex="0" appInfo>i<span class="dt-info-globo">La cuenta con la que trabajará la app, aparte de la de administración. Se le da permiso solo sobre esta base. Si ya existe, se reutiliza tal cual: no se le cambia la contraseña, así que escribe la que ya tiene.</span></span>
@@ -92,11 +123,21 @@
         (por ejemplo {{wiz.usuario_app}}_app).
       </div>
 
+      <div class="dt-aviso" *ngIf="cambioDeMotor">
+        Estás a punto de usar un motor distinto (<b>{{motorEtiqueta}}</b>) del que está en uso ahora
+        (<b>{{motorActivo}}</b>). Esto <b>no</b> migra los datos: crearía una base <b>vacía</b> en {{motorEtiqueta}}.
+        Si quieres conservar tus datos, usa <b>Migrar de motor</b> (sección más abajo).
+      </div>
+      <label class="dt-check" *ngIf="cambioDeMotor">
+        <input type="checkbox" [(ngModel)]="cambioMotorConfirmado" />
+        <span>Entiendo y quiero <b>empezar de cero</b> con una base vacía en {{motorEtiqueta}} (sin migrar mis datos)</span>
+      </label>
+
       <div class="dt-acc">
         <button class="dt-mini" (click)="probarAdmin()" [disabled]="probandoAdmin">{{probandoAdmin ? 'PROBANDO…' : 'PROBAR CONEXIÓN'}}</button>
-        <button class="dt-boton" *ngIf="escA && !baseExiste" (click)="crearBase()" [disabled]="creandoBase">{{creandoBase ? 'CREANDO…' : 'CREAR BASE DE DATOS Y TABLAS'}}</button>
-        <button class="dt-boton" *ngIf="escA && baseExiste && puedeTablas" (click)="crearTablas()" [disabled]="creandoBase">{{creandoBase ? 'CREANDO…' : 'CREAR TABLAS EN LA BASE EXISTENTE'}}</button>
-        <button class="dt-boton" *ngIf="escB && puedeTablas" (click)="crearTablas()" [disabled]="creandoBase">{{creandoBase ? 'CREANDO…' : 'CREAR LAS TABLAS'}}</button>
+        <button class="dt-boton" *ngIf="escA && !baseExiste && (!cambioDeMotor || cambioMotorConfirmado)" (click)="crearBase()" [disabled]="creandoBase">{{creandoBase ? 'CREANDO…' : 'CREAR BASE DE DATOS Y TABLAS'}}</button>
+        <button class="dt-boton" *ngIf="escA && baseExiste && puedeTablas && (!cambioDeMotor || cambioMotorConfirmado)" (click)="crearTablas()" [disabled]="creandoBase">{{creandoBase ? 'CREANDO…' : 'CREAR TABLAS EN LA BASE EXISTENTE'}}</button>
+        <button class="dt-boton" *ngIf="escB && puedeTablas && (!cambioDeMotor || cambioMotorConfirmado)" (click)="crearTablas()" [disabled]="creandoBase">{{creandoBase ? 'CREANDO…' : 'CREAR LAS TABLAS'}}</button>
       </div>
 
       <div *ngIf="pruebaAdmin" class="dt-prueba" [class.ok]="pruebaAdmin.ok" [class.err]="!pruebaAdmin.ok">
@@ -113,7 +154,7 @@
       <!-- Escenario B: hay que crear la base / otorgar permisos a mano -->
       <div class="dt-sql-caja" *ngIf="escB && (!baseExiste || !puedeTablas)">
         <span class="dt-sql-titulo">Crea la base y otorga permisos (una sola vez)</span>
-        <p class="dt-ayuda">Ejecuta esto en tu cliente de MariaDB con un usuario administrador y luego pulsa
+        <p class="dt-ayuda">Ejecuta esto en tu cliente de {{motorEtiqueta}} con un usuario administrador y luego pulsa
           <b>Probar conexión</b> otra vez.</p>
         <pre class="dt-sql">{{sqlConfigBd}}</pre>
         <div class="dt-acc"><button class="dt-mini" (click)="copiarSql()">COPIAR SQL</button></div>
@@ -131,6 +172,14 @@
     </div>
 
     <ng-container *ngIf="bdDisponible">
+    <!-- MOTOR EN USO -->
+    <div class="dt-motor-activo">
+      <span class="dt-motor-activo-k">Motor en uso</span>
+      <span class="dt-motor-activo-v">{{motorActivo}}</span>
+      <span class="dt-motor-activo-d" *ngIf="!inventarioEsServidor">Archivo: <span class="mono">{{inventario?.archivo || '—'}}</span></span>
+      <span class="dt-motor-activo-d" *ngIf="inventarioEsServidor">Base: <span class="mono">{{inventario?.base || '—'}}</span> · Servidor: <span class="mono">{{(inventario?.host || '—') + ':' + (inventario?.puerto || '')}}</span></span>
+    </div>
+
     <!-- CONEXIÓN -->
     <div class="dt-grupo">
       <div class="dt-head">
@@ -140,12 +189,14 @@
       </div>
       <div class="dt-grid">
         <div class="dt-dato"><span class="dt-dato-k">Tipo
-            <span class="info-i" tabindex="0" appInfo>i<span class="dt-info-globo">El programa que guarda los datos (MariaDB).</span></span></span><span class="dt-dato-v mono">{{inventario?.motor || '—'}}</span></div>
-        <div class="dt-dato"><span class="dt-dato-k">Servidor
+            <span class="info-i" tabindex="0" appInfo>i<span class="dt-info-globo">El programa que guarda los datos.</span></span></span><span class="dt-dato-v mono">{{inventario?.motor_etiqueta || inventario?.motor || '—'}}</span></div>
+        <div class="dt-dato" *ngIf="inventarioEsServidor"><span class="dt-dato-k">Servidor
             <span class="info-i" tabindex="0" appInfo>i<span class="dt-info-globo">La computadora y el puerto donde está la base de datos.</span></span></span><span class="dt-dato-v mono">{{(inventario?.host || '—') + (inventario?.puerto ? ':' + inventario?.puerto : '')}}</span></div>
-        <div class="dt-dato"><span class="dt-dato-k">Base de datos
+        <div class="dt-dato" *ngIf="!inventarioEsServidor"><span class="dt-dato-k">Archivo de la base de datos
+            <span class="info-i" tabindex="0" appInfo>i<span class="dt-info-globo">El archivo donde se guarda todo. Para copiarlo o moverlo, usa los respaldos.</span></span></span><span class="dt-dato-v mono" [title]="inventario?.archivo || ''">{{inventario?.archivo || '—'}}</span></div>
+        <div class="dt-dato" *ngIf="inventarioEsServidor"><span class="dt-dato-k">Base de datos
             <span class="info-i" tabindex="0" appInfo>i<span class="dt-info-globo">El nombre de la "caja" donde están guardados tus datos.</span></span></span><span class="dt-dato-v mono">{{inventario?.base || '—'}}</span></div>
-        <div class="dt-dato"><span class="dt-dato-k">Usuario
+        <div class="dt-dato" *ngIf="inventarioEsServidor"><span class="dt-dato-k">Usuario
             <span class="info-i" tabindex="0" appInfo>i<span class="dt-info-globo">La cuenta con la que la app se conecta todos los días.</span></span></span><span class="dt-dato-v mono">{{inventario?.usuario || '—'}}</span></div>
         <div class="dt-dato"><span class="dt-dato-k">Conector
             <span class="info-i" tabindex="0" appInfo>i<span class="dt-info-globo">El componente interno que usa la app para hablar con la base. No necesitas cambiarlo.</span></span></span><span class="dt-dato-v mono">{{inventario?.driver || '—'}}</span></div>
@@ -164,6 +215,147 @@
         </span>
         <span class="dt-prueba-det" *ngIf="!prueba.ok">{{prueba.mensaje}}</span>
       </div>
+    </div>
+
+    <!-- MIGRAR DE MOTOR -->
+    <div class="dt-grupo dt-mig">
+      <div class="dt-head">
+        <span class="dt-titulo">Migrar de motor</span>
+        <span class="dt-ayuda">Cambia el programa que guarda tus datos (por ejemplo, pasar de MariaDB a SQLite o al revés)
+          <b>copiando</b> todo. Primero se comprueba el destino, luego se copia y se verifica; solo entonces la app
+          empieza a usar el nuevo motor. <b>El origen no se borra.</b> Al terminar hay que <b>reiniciar la aplicación</b>.</span>
+      </div>
+
+      <div class="dt-acc">
+        <button class="dt-mini dt-mini-acento" (click)="abrirMigracion()">{{migrarAbierto ? 'OCULTAR' : 'MIGRAR DE MOTOR…'}}</button>
+      </div>
+
+      <ng-container *ngIf="migrarAbierto">
+        <div class="dt-aviso">Antes de migrar se recomienda <b>RESPALDAR AHORA</b>. La migración no borra el origen,
+          pero conviene tener una copia. No se puede migrar mientras haya un respaldo o restauración en curso.</div>
+
+        <div class="dt-campo">
+          <label class="dt-etiqueta">Motor de destino</label>
+          <div class="dt-motores">
+            <button type="button" class="dt-motor" [class.sel]="mig.motor === 'sqlite'" (click)="setMigMotor('sqlite')">
+              <span class="dt-motor-t">SQLite</span>
+              <span class="dt-motor-d">Un solo archivo, sin instalar nada.</span>
+            </button>
+            <button type="button" class="dt-motor" [class.sel]="mig.motor === 'mariadb'" (click)="setMigMotor('mariadb')">
+              <span class="dt-motor-t">MariaDB</span>
+              <span class="dt-motor-d">Servidor MariaDB.</span>
+            </button>
+            <button type="button" class="dt-motor" [class.sel]="mig.motor === 'mysql'" (click)="setMigMotor('mysql')">
+              <span class="dt-motor-t">MySQL 8</span>
+              <span class="dt-motor-d">Servidor MySQL.</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- destino SQLite -->
+        <div class="dt-campo" *ngIf="!migEsServidor">
+          <label class="dt-etiqueta" for="mg-archivo">Archivo de la base de datos (destino)</label>
+          <div class="dt-input-fila">
+            <input id="mg-archivo" class="dt-input caret-blue mono" [(ngModel)]="mig.archivo" placeholder="C:\...\canal_videos_telegram.db" spellcheck="false" />
+            <button class="dt-mini dt-examinar" type="button" (click)="elegirCarpeta('archivo_mig')" title="Elegir carpeta del sistema" aria-label="Elegir carpeta">…</button>
+          </div>
+          <span class="dt-ayuda">Si el archivo no existe, se crea; si ya existe con datos, habrá que marcar "vaciar destino".</span>
+        </div>
+
+        <!-- destino servidor -->
+        <div class="dt-grid-2" *ngIf="migEsServidor">
+          <div class="dt-campo">
+            <label class="dt-etiqueta" for="mg-host">Servidor</label>
+            <input id="mg-host" class="dt-input caret-blue mono" [(ngModel)]="mig.host" placeholder="localhost" spellcheck="false" />
+          </div>
+          <div class="dt-campo">
+            <label class="dt-etiqueta" for="mg-puerto">Puerto</label>
+            <input id="mg-puerto" class="dt-input caret-blue mono" [(ngModel)]="mig.puerto" placeholder="3306" spellcheck="false" />
+          </div>
+        </div>
+        <div class="dt-campo" *ngIf="migEsServidor">
+          <label class="dt-etiqueta" for="mg-base">Nombre de la base de datos (destino)</label>
+          <input id="mg-base" class="dt-input caret-blue mono" [(ngModel)]="mig.nombre_base" placeholder="canal_videos_telegram" spellcheck="false" />
+        </div>
+        <div class="dt-grid-2" *ngIf="migEsServidor">
+          <div class="dt-campo">
+            <label class="dt-etiqueta" for="mg-uadm">Usuario de administración</label>
+            <input id="mg-uadm" class="dt-input caret-blue mono" [(ngModel)]="mig.usuario_admin" placeholder="root" autocomplete="off" spellcheck="false" />
+          </div>
+          <div class="dt-campo">
+            <label class="dt-etiqueta" for="mg-padm">Contraseña de administración</label>
+            <input id="mg-padm" class="dt-input caret-blue" type="password" appVerClave [(ngModel)]="mig.password_admin" autocomplete="new-password" />
+          </div>
+        </div>
+        <div class="dt-grid-2" *ngIf="migEsServidor">
+          <div class="dt-campo">
+            <label class="dt-etiqueta" for="mg-uapp">Usuario para la aplicación</label>
+            <input id="mg-uapp" class="dt-input caret-blue mono" [(ngModel)]="mig.usuario_app" placeholder="usuario de la app" autocomplete="off" spellcheck="false" />
+          </div>
+          <div class="dt-campo">
+            <label class="dt-etiqueta" for="mg-papp">Contraseña para la aplicación</label>
+            <input id="mg-papp" class="dt-input caret-blue" type="password" appVerClave [(ngModel)]="mig.password_app" autocomplete="new-password" />
+          </div>
+        </div>
+        <span class="dt-ayuda" *ngIf="migEsServidor">Si la base destino no existe, la app la crea (necesita credenciales de administración). Indica el usuario de la app para conectarse después.</span>
+
+        <div class="dt-acc">
+          <button class="dt-mini" (click)="analizarMigracion()" [disabled]="migAnalizando || !!estado?.ocupado">{{migAnalizando ? 'COMPROBANDO…' : 'COMPROBAR DESTINO'}}</button>
+        </div>
+
+        <!-- análisis previo -->
+        <div *ngIf="migAnalisis" class="dt-mig-caja">
+          <div class="dt-prueba" [class.ok]="migAnalisis.ok" [class.err]="!migAnalisis.ok">
+            <span class="dt-prueba-estado">{{migAnalisis.ok ? 'Comprobación completada' : 'No se pudo comprobar'}}</span>
+            <span class="dt-prueba-det" *ngIf="migAnalisis.mensaje">{{migAnalisis.mensaje}}</span>
+            <span class="dt-prueba-det tally" *ngIf="migAnalisis.ok">
+              Origen {{migAnalisis.origen.motor_etiqueta}} · destino {{migAnalisis.destino.motor_etiqueta}} ·
+              {{migAnalisis.total_filas}} fila(s) en {{migAnalisis.tablas.length}} tabla(s)
+            </span>
+          </div>
+
+          <ng-container *ngIf="migAnalisis.ok">
+            <div class="dt-mig-lista">
+              <div class="dt-mig-item" *ngFor="let t of migAnalisis.tablas">
+                <span class="mono">{{t.tabla}}</span><span class="dt-mig-filas">{{t.filas}} fila(s)</span>
+              </div>
+            </div>
+            <div class="dt-aviso" *ngFor="let a of migAnalisis.avisos">{{a}}</div>
+            <label class="dt-check" *ngIf="migAnalisis.destino_tiene_datos">
+              <input type="checkbox" [(ngModel)]="vaciarDestino" />
+              <span>El destino ya tiene datos: <b>vaciar</b> sus tablas de la aplicación antes de copiar</span>
+            </label>
+            <div class="dt-campo">
+              <label class="dt-etiqueta" for="mg-conf">Para confirmar, escribe el nombre de la base actual:
+                <b class="mono">{{migEsperado}}</b></label>
+              <input id="mg-conf" class="dt-input caret-blue mono" [(ngModel)]="migConfirma" [placeholder]="migEsperado" autocomplete="off" spellcheck="false" />
+              <span class="dt-error" *ngIf="migConfirmaError">{{migConfirmaError}}</span>
+            </div>
+            <div class="dt-acc">
+              <button class="dt-boton" (click)="migrarAhora()" [disabled]="migrando || !!estado?.ocupado">{{migrando ? 'MIGRANDO…' : 'MIGRAR AHORA Y VERIFICAR'}}</button>
+            </div>
+          </ng-container>
+        </div>
+
+        <!-- resultado -->
+        <div *ngIf="migResultado" class="dt-mig-caja">
+          <div class="dt-prueba" [class.ok]="migResultado.correcto" [class.err]="!migResultado.correcto">
+            <span class="dt-prueba-estado">{{migResultado.correcto ? 'Migración verificada' : 'Migración no completada'}}</span>
+            <span class="dt-prueba-det">{{migResultado.mensaje}}</span>
+          </div>
+          <div class="dt-mig-lista">
+            <div class="dt-mig-item" *ngFor="let t of migResultado.tablas">
+              <span class="mono">{{t.tabla}}</span>
+              <span class="dt-mig-filas">{{t.filas_origen}} → {{t.filas_destino}}</span>
+              <span class="dt-chip" [ngClass]="t.ok ? 'ok' : 'fallo'">{{t.ok ? 'OK' : 'NO CUADRA'}}</span>
+            </div>
+          </div>
+          <div class="dt-aviso" *ngFor="let e of migResultado.errores">{{e}}</div>
+          <div class="dt-prueba ok" *ngIf="migResultado.reiniciar">
+            <span class="dt-prueba-det"><b>Reinicia la aplicación</b> para empezar a usar el nuevo motor. El origen sigue intacto.</span>
+          </div>
+        </div>
+      </ng-container>
     </div>
 
     <!-- PROGRAMACIÓN -->
@@ -225,9 +417,9 @@
           <button class="dt-mini dt-examinar" type="button" (click)="elegirCarpeta('dir_manual')" title="Elegir carpeta del sistema" aria-label="Elegir carpeta">…</button>
         </div>
       </div>
-      <div class="dt-campo">
-        <label class="dt-etiqueta" for="dt-bin">Carpeta bin de MariaDB (opcional)
-          <span class="info-i" tabindex="0" appInfo>i<span class="dt-info-globo">Carpeta donde están los programas de MariaDB (mariadb-dump). Déjala vacía y la app los busca sola.</span></span>
+      <div class="dt-campo" *ngIf="inventarioEsServidor">
+        <label class="dt-etiqueta" for="dt-bin">Carpeta bin del servidor (opcional)
+          <span class="info-i" tabindex="0" appInfo>i<span class="dt-info-globo">Carpeta donde están los programas del servidor (mariadb-dump o mysqldump). Déjala vacía y la app los busca sola.</span></span>
         </label>
         <div class="dt-input-fila">
           <input id="dt-bin" class="dt-input caret-blue mono" [(ngModel)]="cfg.bin_dir" placeholder="(se detecta sola)" />
@@ -235,7 +427,7 @@
         </div>
       </div>
 
-      <div class="dt-fila dt-fila-herramientas">
+      <div class="dt-fila dt-fila-herramientas" *ngIf="inventarioEsServidor">
         <span class="dt-ayuda">
           Programa para crear copias:
           <b class="mono">{{inventario?.bin_dump || 'NO ENCONTRADO'}}</b>
@@ -249,7 +441,7 @@
       <span class="dt-ayuda" *ngIf="!cfg.auto_activo">El respaldo automático está desactivado.</span>
 
       <div class="dt-acc">
-        <button class="dt-mini dt-mini-acento" (click)="guardarConfig()" [disabled]="guardando">{{guardando ? 'GUARDANDO…' : 'GUARDAR PROGRAMACIÓN'}}</button>
+        <button class="dt-mini dt-mini-acento" (click)="guardarConfig()" [disabled]="guardando || !!estado?.ocupado">{{guardando ? 'GUARDANDO…' : 'GUARDAR PROGRAMACIÓN'}}</button>
       </div>
     </div>
 
@@ -263,8 +455,8 @@
       <div class="dt-acc">
         <button class="dt-boton" (click)="respaldarAhora()" [disabled]="!!estado?.ocupado || lanzando">{{lanzando ? 'LANZANDO…' : 'RESPALDAR AHORA'}}</button>
         <button class="dt-mini" (click)="pedirImportar()" [disabled]="!!estado?.ocupado">IMPORTAR Y RESTAURAR…</button>
-        <button class="dt-mini" (click)="revisarIntegridad()" title="Comprueba que los respaldos estén completos. También descarta los archivos a medias que quedaron de un cierre abrupto (nunca toca respaldos completos).">REVISAR INTEGRIDAD</button>
-        <input #archivoInput type="file" accept=".sql,.gz,.sql.gz" hidden (change)="onArchivo($event)" />
+        <button class="dt-mini" (click)="revisarIntegridad()" [disabled]="!!estado?.ocupado" title="Comprueba que los respaldos estén completos. También descarta los archivos a medias que quedaron de un cierre abrupto (nunca toca respaldos completos).">REVISAR INTEGRIDAD</button>
+        <input #archivoInput type="file" accept=".sql,.gz,.sql.gz,.db,.sqlite" hidden (change)="onArchivo($event)" />
       </div>
       <span class="dt-ayuda" *ngIf="revision">
         Última revisión: {{revision.interrumpidos}} interrumpido(s),
@@ -300,7 +492,7 @@
           <a class="dt-mini" *ngIf="r.estado === 'completado' && r.existe" [href]="urlDescarga(r.id)" download>DESCARGAR</a>
           <button class="dt-mini" *ngIf="r.estado === 'completado' && r.existe" (click)="verificar(r)">VERIFICAR</button>
           <button class="dt-mini" *ngIf="!r.operacion && r.estado === 'completado' && r.existe" (click)="pedirRestaurar(r)" [disabled]="!!estado?.ocupado">RESTAURAR</button>
-          <button class="dt-mini dt-mini-peligro" (click)="pedirEliminar(r)" [disabled]="estado?.id_en_curso === r.id">BORRAR</button>
+          <button class="dt-mini dt-mini-peligro" (click)="pedirEliminar(r)" [disabled]="!!estado?.ocupado || estado?.id_en_curso === r.id">BORRAR</button>
         </div>
       </div>
     </div>

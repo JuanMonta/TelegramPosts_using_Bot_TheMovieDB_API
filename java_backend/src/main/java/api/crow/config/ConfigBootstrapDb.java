@@ -33,13 +33,24 @@ public class ConfigBootstrapDb {
 
     public static final String ARCHIVO = "config-db.yaml";
 
-    public record Bootstrap(boolean enabled, String host, String puerto,
+    /**
+     * @param archivo ruta del archivo .db para motores de archivo (SQLite); vacío
+     *                para los motores de servidor (MariaDB/MySQL).
+     */
+    public record Bootstrap(boolean enabled, String motor, String host, String puerto,
                             String usuarioAdmin, String passwordAdmin,
-                            String nombreBase, String usuarioApp, String passwordApp) {
+                            String nombreBase, String usuarioApp, String passwordApp,
+                            String archivo) {
 
-        /** Copia con el host/puerto/base indicados (mantiene admin y usuario app). */
-        public Bootstrap conDestino(String host, String puerto, String base) {
-            return new Bootstrap(enabled, host, puerto, usuarioAdmin, passwordAdmin, base, usuarioApp, passwordApp);
+        /** Copia con el host/puerto/base/archivo indicados (mantiene motor, admin y usuario app). */
+        public Bootstrap conDestino(String host, String puerto, String base, String archivo) {
+            return new Bootstrap(enabled, motor, host, puerto, usuarioAdmin, passwordAdmin,
+                    base, usuarioApp, passwordApp, archivo);
+        }
+
+        /** Motor de base de datos resuelto (nunca null; por defecto MariaDB). */
+        public MotorBd motorEnum() {
+            return MotorBd.desde(motor);
         }
     }
 
@@ -83,6 +94,13 @@ public class ConfigBootstrapDb {
         return null;
     }
 
+    /** Raíz de la app (donde vive java_backend/), robusta ante el cwd. */
+    public static Path raizApp() {
+        Path cwd = Path.of(System.getProperty("user.dir", ".")).toAbsolutePath().normalize();
+        Path r = buscarRaiz(cwd);
+        return r != null ? r : cwd;
+    }
+
     public Path archivo() {
         return archivo;
     }
@@ -98,12 +116,18 @@ public class ConfigBootstrapDb {
         }
     }
 
+    /**
+     * Valores por defecto para una instalación NUEVA (sin config-db.yaml): SQLite,
+     * el motor sin servidor. El archivo .db se crea desde el asistente de Datos.
+     */
     public Bootstrap defecto() {
-        return new Bootstrap(true, "localhost", "3306", "", "", "", "", "");
+        String archivo = raizApp().resolve("database").resolve("canal_videos_telegram.db").toString();
+        return new Bootstrap(true, MotorBd.SQLITE.clave(), "", "", "", "", "canal_videos_telegram", "", "", archivo);
     }
 
     /** Escribe el archivo completo (datasource + bootstrap-bd). Lanza si no puede. */
     public void guardar(Bootstrap b) {
+        MotorBd motor = b.motorEnum();
         StringBuilder sb = new StringBuilder();
         sb.append("# ============================================================\n");
         sb.append("#  Conexión a la base de datos + credenciales de administrador\n");
@@ -113,20 +137,43 @@ public class ConfigBootstrapDb {
         sb.append("# ============================================================\n\n");
         sb.append("spring:\n");
         sb.append("  datasource:\n");
-        sb.append("    url: ").append(q("jdbc:mariadb://" + b.host() + ":" + b.puerto() + "/" + b.nombreBase())).append("\n");
-        sb.append("    username: ").append(q(b.usuarioApp())).append("\n");
-        sb.append("    password: ").append(q(b.passwordApp())).append("\n");
-        sb.append("    driver-class-name: org.mariadb.jdbc.Driver\n\n");
+        if (motor.esServidor()) {
+            sb.append("    url: ").append(q(motor.prefijoUrl() + b.host() + ":" + b.puerto() + "/" + b.nombreBase()
+                    + motor.parametrosUrl())).append("\n");
+            sb.append("    username: ").append(q(b.usuarioApp())).append("\n");
+            sb.append("    password: ").append(q(b.passwordApp())).append("\n");
+        } else {
+            sb.append("    url: ").append(q(motor.prefijoUrl() + b.archivo() + motor.parametrosUrl())).append("\n");
+        }
+        sb.append("    driver-class-name: ").append(motor.driver()).append("\n");
+        if (!motor.esServidor()) {
+            sb.append("    hikari:\n");
+            sb.append("      # SQLite serializa las escrituras: un pool mínimo evita bloqueos.\n");
+            sb.append("      maximum-pool-size: 1\n");
+            sb.append("      minimum-idle: 0\n");
+            sb.append("      connection-timeout: 1500\n");
+            sb.append("      initialization-fail-timeout: -1\n");
+        }
+        sb.append("  jpa:\n");
+        sb.append("    properties:\n");
+        sb.append("      hibernate:\n");
+        sb.append("        dialect: ").append(motor.dialecto()).append("\n\n");
         sb.append("app:\n");
         sb.append("  bootstrap-bd:\n");
         sb.append("    enabled: ").append(b.enabled()).append("\n");
-        sb.append("    host: ").append(q(b.host())).append("\n");
-        sb.append("    puerto: ").append(numero(b.puerto())).append("\n");
-        sb.append("    usuario-admin: ").append(q(b.usuarioAdmin())).append("\n");
-        sb.append("    password-admin: ").append(q(b.passwordAdmin())).append("\n");
-        sb.append("    nombre-base: ").append(q(b.nombreBase())).append("\n");
-        sb.append("    usuario-app: ").append(q(b.usuarioApp())).append("\n");
-        sb.append("    password-app: ").append(q(b.passwordApp())).append("\n");
+        sb.append("    motor: ").append(motor.clave()).append("\n");
+        if (motor.esServidor()) {
+            sb.append("    host: ").append(q(b.host())).append("\n");
+            sb.append("    puerto: ").append(numero(b.puerto())).append("\n");
+            sb.append("    usuario-admin: ").append(q(b.usuarioAdmin())).append("\n");
+            sb.append("    password-admin: ").append(q(b.passwordAdmin())).append("\n");
+            sb.append("    nombre-base: ").append(q(b.nombreBase())).append("\n");
+            sb.append("    usuario-app: ").append(q(b.usuarioApp())).append("\n");
+            sb.append("    password-app: ").append(q(b.passwordApp())).append("\n");
+        } else {
+            sb.append("    archivo: ").append(q(b.archivo())).append("\n");
+            sb.append("    nombre-base: ").append(q(b.nombreBase())).append("\n");
+        }
         try {
             Files.writeString(archivo, sb.toString(), StandardCharsets.UTF_8);
         } catch (IOException e) {
@@ -142,6 +189,21 @@ public class ConfigBootstrapDb {
         Map<String, Object> ds = mapa(mapa(root.get("spring")).get("datasource"));
 
         String url = txt(ds.get("url"));
+        boolean enabled = b.get("enabled") == null || bool(b.get("enabled"));
+
+        // Motor: del bloque bootstrap-bd si está; si no, derivado de la URL del datasource.
+        String motorTxt = txt(b.get("motor"));
+        MotorBd motor = motorTxt.isEmpty() ? MotorBd.desdeUrl(url) : MotorBd.desde(motorTxt);
+
+        // Motores de archivo (SQLite): sólo interesan la ruta y el nombre.
+        if (!motor.esServidor()) {
+            String archivo = txt(b.get("archivo"));
+            if (archivo.isEmpty()) archivo = archivoDeUrlSqlite(url);
+            String base = txt(b.get("nombre-base"));
+            if (base.isEmpty()) base = nombreDeArchivo(archivo);
+            return new Bootstrap(enabled, motor.clave(), "", "", "", "", base, "", "", archivo);
+        }
+
         String host = txt(b.get("host"));
         String puerto = txt(b.get("puerto"));
         String base = txt(b.get("nombre-base"));
@@ -164,18 +226,40 @@ public class ConfigBootstrapDb {
             }
         }
 
-        boolean enabled = b.get("enabled") == null || bool(b.get("enabled"));
-
         String usuarioApp = txt(b.get("usuario-app"));
         if (usuarioApp.isEmpty()) usuarioApp = txt(ds.get("username"));
         String passwordApp = txt(b.get("password-app"));
         if (passwordApp.isEmpty()) passwordApp = txt(ds.get("password"));
 
         return new Bootstrap(enabled,
+                motor.clave(),
                 host.isEmpty() ? "localhost" : host,
-                puerto.isEmpty() ? "3306" : puerto,
+                puerto.isEmpty() ? motor.puertoDefectoTexto() : puerto,
                 txt(b.get("usuario-admin")), txt(b.get("password-admin")),
-                base, usuarioApp, passwordApp);
+                base, usuarioApp, passwordApp, "");
+    }
+
+    /** Extrae la ruta del archivo de una URL {@code jdbc:sqlite:<ruta>[?opciones]}. */
+    public static String archivoDeUrlSqlite(String url) {
+        if (url == null) return "";
+        String u = url.trim();
+        if (u.startsWith(MotorBd.SQLITE.prefijoUrl())) {
+            u = u.substring(MotorBd.SQLITE.prefijoUrl().length());
+        }
+        int q = u.indexOf('?');
+        if (q >= 0) u = u.substring(0, q);
+        return u.trim();
+    }
+
+    /** Nombre de la base a partir de la ruta del archivo (sin carpeta ni extensión). */
+    public static String nombreDeArchivo(String ruta) {
+        if (ruta == null || ruta.isBlank()) return "";
+        String n = ruta.replace('\\', '/');
+        int barra = n.lastIndexOf('/');
+        if (barra >= 0) n = n.substring(barra + 1);
+        int punto = n.lastIndexOf('.');
+        if (punto > 0) n = n.substring(0, punto);
+        return n.trim();
     }
 
     @SuppressWarnings("unchecked")

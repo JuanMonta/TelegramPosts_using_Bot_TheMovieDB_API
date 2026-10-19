@@ -2,10 +2,12 @@ package api.crow.web;
 
 import api.crow.config.ConfigBootstrapDb;
 import api.crow.config.ConfigBootstrapDb.Bootstrap;
+import api.crow.config.MotorBd;
 import api.crow.domain.ConfigRespaldo;
 import api.crow.service.BaseDatosAdminService;
 import api.crow.service.BaseDatosService;
 import api.crow.service.ConfigRespaldoService;
+import api.crow.service.MigracionService;
 import api.crow.service.RespaldoService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ContentDisposition;
@@ -42,6 +44,7 @@ public class DatosController {
     private final RespaldoService respaldos;
     private final ConfigBootstrapDb cfgBootstrap;
     private final BaseDatosAdminService admin;
+    private final MigracionService migracion;
 
     // ---- estado y conexión ----
 
@@ -91,7 +94,10 @@ public class DatosController {
     @PostMapping("/bootstrap/crear")
     public ResponseEntity<?> crearBase(@RequestBody(required = false) Map<String, Object> body) {
         try {
-            return ResponseEntity.ok(admin.crear(bootstrapDesde(body)));
+            Bootstrap b = bootstrapDesde(body);
+            ResponseEntity<?> bloqueo = rechazoCambioMotor(body, b);
+            if (bloqueo != null) return bloqueo;
+            return ResponseEntity.ok(admin.crear(b));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         } catch (IllegalStateException e) {
@@ -106,7 +112,42 @@ public class DatosController {
     @PostMapping("/bootstrap/crear-tablas")
     public ResponseEntity<?> crearTablas(@RequestBody(required = false) Map<String, Object> body) {
         try {
-            return ResponseEntity.ok(admin.crearTablas(bootstrapDesde(body)));
+            Bootstrap b = bootstrapDesde(body);
+            ResponseEntity<?> bloqueo = rechazoCambioMotor(body, b);
+            if (bloqueo != null) return bloqueo;
+            return ResponseEntity.ok(admin.crearTablas(b));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    // ---- migración de motor (asistida) ----
+
+    /** Analiza origen y destino sin tocar nada: tablas, filas y avisos. */
+    @PostMapping("/migracion/analizar")
+    public ResponseEntity<?> analizarMigracion(@RequestBody(required = false) Map<String, Object> body) {
+        try {
+            return ResponseEntity.ok(migracion.analizar(destinoDesde(body)));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("error", e.getMessage() == null ? "No se pudo analizar el destino" : e.getMessage()));
+        }
+    }
+
+    /**
+     * Migra los datos al motor destino, verifica (conteo + checksum por tabla) y,
+     * solo si todo cuadra, cambia la conexión. El origen nunca se borra.
+     */
+    @PostMapping("/migracion/migrar")
+    public ResponseEntity<?> migrarMotor(@RequestBody(required = false) Map<String, Object> body) {
+        try {
+            Bootstrap d = destinoDesde(body);
+            boolean vaciar = booleano(body, "vaciar_destino", false);
+            return ResponseEntity.ok(migracion.migrar(d, vaciar, texto(body, "confirmacion", null)));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         } catch (IllegalStateException e) {
@@ -124,6 +165,9 @@ public class DatosController {
     @PutMapping("/config")
     public ResponseEntity<?> guardarConfig(@RequestBody(required = false) Map<String, Object> body) {
         try {
+            // No se puede cambiar la programación (ni las carpetas de destino) mientras
+            // hay un respaldo/restauración en curso.
+            respaldos.exigirLibre("cambiar la programación de respaldos");
             ConfigRespaldoService.Config actual = cfg.cargar();
             ConfigRespaldoService.Config nueva = new ConfigRespaldoService.Config(
                     booleano(body, "auto_activo", actual.autoActivo()),
@@ -140,6 +184,8 @@ public class DatosController {
             return ResponseEntity.ok(out);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", e.getMessage()));
         }
     }
 
@@ -235,8 +281,10 @@ public class DatosController {
             }
             String nombre = archivo.getOriginalFilename();
             String bajo = nombre == null ? "" : nombre.toLowerCase();
-            if (!bajo.endsWith(".sql") && !bajo.endsWith(".sql.gz") && !bajo.endsWith(".gz")) {
-                throw new IllegalArgumentException("El archivo debe ser .sql o .sql.gz");
+            boolean valido = bajo.endsWith(".gz") || bajo.endsWith(".sql")
+                    || bajo.endsWith(".db") || bajo.endsWith(".sqlite");
+            if (!valido) {
+                throw new IllegalArgumentException("El archivo debe ser un respaldo (.sql.gz, .db.gz, .sql, .db…).");
             }
             try (var in = archivo.getInputStream()) {
                 return ResponseEntity.ok(respaldos.importar(nombre, in, confirmacion));
@@ -252,8 +300,12 @@ public class DatosController {
     }
 
     @PostMapping("/integridad/revisar")
-    public Map<String, Object> revisar() {
-        return respaldos.revisarIntegridad();
+    public ResponseEntity<?> revisar() {
+        try {
+            return ResponseEntity.ok(respaldos.revisarIntegridad());
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", e.getMessage()));
+        }
     }
 
     /** Cambios desde un id dado (para avisos in-app). */
@@ -279,13 +331,50 @@ public class DatosController {
         String pApp = texto(body, "password_app", "");
         if (pApp.isEmpty()) pApp = actual.passwordApp();
         return new Bootstrap(true,
+                api.crow.config.MotorBd.desde(texto(body, "motor", actual.motor())).clave(),
                 texto(body, "host", actual.host()),
                 texto(body, "puerto", actual.puerto()),
                 texto(body, "usuario_admin", actual.usuarioAdmin()),
                 pAdmin,
                 texto(body, "nombre_base", actual.nombreBase()),
                 texto(body, "usuario_app", actual.usuarioApp()),
-                pApp);
+                pApp,
+                texto(body, "archivo", actual.archivo()));
+    }
+
+    /**
+     * Configuración del DESTINO de la migración. A diferencia del asistente, los
+     * campos en blanco NO heredan las contraseñas guardadas (el destino es otro sitio).
+     */
+    private Bootstrap destinoDesde(Map<String, Object> body) {
+        Bootstrap actual = cfgBootstrap.cargar();
+        return new Bootstrap(true,
+                MotorBd.desde(texto(body, "motor", actual.motor())).clave(),
+                texto(body, "host", actual.host()),
+                texto(body, "puerto", actual.puerto()),
+                texto(body, "usuario_admin", ""),
+                texto(body, "password_admin", ""),
+                texto(body, "nombre_base", ""),
+                texto(body, "usuario_app", ""),
+                texto(body, "password_app", ""),
+                texto(body, "archivo", ""));
+    }
+
+    /**
+     * Impide cambiar de motor "por accidente" desde el asistente: si la app ya está
+     * conectada a una base y se pide otro motor, hay que usar la migración (o marcar
+     * explícitamente "Empezar de cero").
+     */
+    private ResponseEntity<?> rechazoCambioMotor(Map<String, Object> body, Bootstrap b) {
+        if (db.disponible() && b.motorEnum() != db.motor()
+                && !booleano(body, "cambio_motor_confirmado", false)) {
+            String activo = db.motor().etiqueta();
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error",
+                    "La aplicación está usando " + activo + " ahora mismo. Para cambiar de motor sin perder datos, "
+                    + "usa la sección \"Migrar de motor\". Si de verdad quieres empezar de cero con "
+                    + b.motorEnum().etiqueta() + " (una base vacía), marca la casilla \"Empezar de cero\"."));
+        }
+        return null;
     }
 
     private Map<String, Object> configMap() {
