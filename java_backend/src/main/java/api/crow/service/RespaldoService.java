@@ -100,6 +100,31 @@ public class RespaldoService {
         return ocupado.get();
     }
 
+    /**
+     * Lanza {@link IllegalStateException} si hay una operación de respaldo/restauración
+     * en curso. Se usa para bloquear acciones que no deben convivir con ella
+     * (revisar integridad, importar, cambiar la programación, etc.).
+     */
+    public void exigirLibre(String accion) {
+        if (ocupado()) {
+            throw new IllegalStateException("Hay una operación en curso (" + operacion.get()
+                    + "). Espera a que termine para " + accion + ".");
+        }
+    }
+
+    /**
+     * Toma el bloqueo global para una operación externa (p. ej. la migración de motor),
+     * de modo que no se solape con respaldos/restauraciones y la UI lo muestre como
+     * "ocupado". Lanza si ya hay algo en curso. Quien lo toma DEBE llamar a {@link #liberar()}.
+     */
+    public void reservar(String operacionExterna) {
+        if (!ocupado.compareAndSet(false, true)) {
+            throw new IllegalStateException("Hay una operación en curso (" + operacion.get() + "). Espera a que termine.");
+        }
+        operacion.set(operacionExterna);
+        enCursoId.set(0);
+    }
+
     public Map<String, Object> estado() {
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("ocupado", ocupado());
@@ -172,35 +197,47 @@ public class RespaldoService {
         if (!Respaldo.TIPO_AUTOMATICO.equals(tipo) && !Respaldo.TIPO_MANUAL.equals(tipo)) {
             throw new IllegalArgumentException("El tipo de respaldo debe ser 'automatico' o 'manual'");
         }
-        if (cfg.binDump() == null) {
-            throw new IllegalArgumentException("No se encontró mariadb-dump.exe. Indica la carpeta bin de MariaDB "
-                    + "en esta misma sección y vuelve a intentar.");
+        if (!db.esArchivo() && cfg.binDump() == null) {
+            throw new IllegalArgumentException("No se encontró la herramienta de volcado (mysqldump o mariadb-dump). "
+                    + "Indica la carpeta bin de tu instalación (MariaDB o MySQL) en esta misma sección y vuelve a intentar.");
         }
         if (!ocupado.compareAndSet(false, true)) {
             throw new IllegalStateException("Ya hay una operación en curso (" + operacion.get() + "). Espera a que termine.");
         }
-        Path dir = Respaldo.TIPO_AUTOMATICO.equals(tipo) ? cfg.dirAuto() : cfg.dirManual();
-
-        Respaldo r = new Respaldo();
-        r.setTipo(tipo);
-        r.setEstado(Respaldo.ESTADO_EN_PROGRESO);
-        r.setMotivo(motivo == null ? Respaldo.MOTIVO_MANUAL : motivo);
-        r.setArchivo(nombreArchivo(tipo));
-        r.setRuta(dir.resolve(r.getArchivo()).toString());
-        r.setMotor(db.conexion().motor());
-        r.setVersion(VERSION);
-        r.setIniciadoEn(LocalDateTime.now());
-        r.setTokenEjecucion(UUID.randomUUID().toString());
-        r = repo.save(r);
-
-        final Long id = r.getId();
+        // Reservamos el bloqueo ANTES de preparar la fila; si algo falla aquí hay que
+        // soltarlo para no dejar el sistema bloqueado para siempre.
         operacion.set(Respaldo.TIPO_AUTOMATICO.equals(tipo) ? OPER_RESPALDO_AUTO : OPER_RESPALDO_MANUAL);
-        enCursoId.set(id);
-        worker.submit(() -> ejecutarGuarded(id, () -> ejecutarRespaldo(id)));
-        return resumen(id);
+        enCursoId.set(0);
+        try {
+            Path dir = Respaldo.TIPO_AUTOMATICO.equals(tipo) ? cfg.dirAuto() : cfg.dirManual();
+
+            Respaldo r = new Respaldo();
+            r.setTipo(tipo);
+            r.setEstado(Respaldo.ESTADO_EN_PROGRESO);
+            r.setMotivo(motivo == null ? Respaldo.MOTIVO_MANUAL : motivo);
+            r.setArchivo(nombreArchivo(tipo));
+            r.setRuta(dir.resolve(r.getArchivo()).toString());
+            r.setMotor(db.conexion().motor());
+            r.setVersion(VERSION);
+            r.setIniciadoEn(LocalDateTime.now());
+            r.setTokenEjecucion(UUID.randomUUID().toString());
+            r = repo.save(r);
+
+            final Long id = r.getId();
+            enCursoId.set(id);
+            worker.submit(() -> ejecutarGuarded(id, () -> ejecutarRespaldo(id)));
+            return resumen(id);
+        } catch (RuntimeException e) {
+            liberar();
+            throw e;
+        }
     }
 
     private void ejecutarRespaldo(Long id) {
+        if (db.esArchivo()) {
+            ejecutarRespaldoSqlite(id);
+            return;
+        }
         Respaldo r = repo.findById(id).orElseThrow();
         long t0 = System.currentTimeMillis();
         Path final1 = Path.of(r.getRuta());
@@ -211,7 +248,7 @@ public class RespaldoService {
             Files.deleteIfExists(part);
 
             String bin = cfg.binDump();
-            if (bin == null) throw new IllegalStateException("No se encontró mariadb-dump.exe");
+            if (bin == null) throw new IllegalStateException("No se encontró la herramienta de volcado (mysqldump/mariadb-dump)");
             tmp = archivoDefaults();
 
             List<String> cmd = new ArrayList<>();
@@ -246,7 +283,7 @@ public class RespaldoService {
                 salida = ejecutar(cmd, null, gz, TIMEOUT_DUMP_MIN);
             }
             if (salida.codigo() != 0) {
-                throw new IllegalStateException("mariadb-dump terminó con código " + salida.codigo()
+                throw new IllegalStateException("La herramienta de volcado terminó con código " + salida.codigo()
                         + (salida.error().isBlank() ? "" : ": " + corto(salida.error())));
             }
             long tam = Files.size(part);
@@ -273,6 +310,64 @@ public class RespaldoService {
             repo.save(r);
         } finally {
             borrarSilencioso(tmp);
+        }
+    }
+
+    /**
+     * Respaldo SQLite: {@code VACUUM INTO} genera una copia consistente del archivo
+     * de la base y luego se comprime a {@code .db.gz} (con SHA-256), igual patrón
+     * que los motores de servidor pero sin herramientas externas.
+     */
+    private void ejecutarRespaldoSqlite(Long id) {
+        Respaldo r = repo.findById(id).orElseThrow();
+        long t0 = System.currentTimeMillis();
+        Path final1 = Path.of(r.getRuta());
+        Path part = final1.resolveSibling(final1.getFileName() + ".part");
+        Path volcado = null;
+        try {
+            Files.createDirectories(final1.getParent());
+            Files.deleteIfExists(part);
+
+            // 1) Foto consistente de la base con VACUUM INTO (archivo nuevo).
+            volcado = Files.createTempFile("crow-sqlite-", ".db");
+            Files.deleteIfExists(volcado);
+            String destino = volcado.toAbsolutePath().toString().replace('\\', '/').replace("'", "''");
+            try (java.sql.Connection c = db.nuevaConexion(); java.sql.Statement st = c.createStatement()) {
+                st.execute("VACUUM INTO '" + destino + "'");
+            }
+
+            // 2) Comprimir a .part calculando el SHA-256 del .gz.
+            MessageDigest sha = MessageDigest.getInstance("SHA-256");
+            try (OutputStream fileOut = Files.newOutputStream(part);
+                 DigestOutputStream dos = new DigestOutputStream(fileOut, sha);
+                 GZIPOutputStream gz = new GZIPOutputStream(dos, 1 << 16);
+                 InputStream in = Files.newInputStream(volcado)) {
+                in.transferTo(gz);
+            }
+            long tam = Files.size(part);
+            if (tam <= 0) throw new IllegalStateException("El respaldo quedó vacío");
+
+            Files.move(part, final1, StandardCopyOption.REPLACE_EXISTING);
+            r.setEstado(Respaldo.ESTADO_COMPLETADO);
+            r.setTamanoBytes(tam);
+            r.setChecksumSha256(hex(sha.digest()));
+            r.setTerminadoEn(LocalDateTime.now());
+            r.setDuracionMs(System.currentTimeMillis() - t0);
+            r.setMensaje("Respaldo de SQLite completado correctamente.");
+            repo.save(r);
+            log.info("Respaldo SQLite {} ({}) completado: {} ({} bytes)", id, r.getTipo(), final1.getFileName(), tam);
+
+            if (Respaldo.TIPO_AUTOMATICO.equals(r.getTipo())) aplicarRetencion();
+        } catch (Exception e) {
+            log.error("Respaldo SQLite {} falló: {}", id, e.getMessage(), e);
+            borrarSilencioso(part);
+            r.setEstado(Respaldo.ESTADO_FALLO);
+            r.setTerminadoEn(LocalDateTime.now());
+            r.setDuracionMs(System.currentTimeMillis() - t0);
+            r.setMensaje(corto(e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage()));
+            repo.save(r);
+        } finally {
+            borrarSilencioso(volcado);
         }
     }
 
@@ -310,6 +405,8 @@ public class RespaldoService {
     public Map<String, Object> importar(String nombreOriginal, InputStream contenido, String confirmacion) {
         exigirConfirmacion(confirmacion);
         if (contenido == null) throw new IllegalArgumentException("No se recibió ningún archivo");
+        // Rechazo temprano: no guardamos el archivo subido si ya hay algo en curso.
+        exigirLibre("importar");
         Path destino;
         try {
             Path dir = cfg.dirManual();
@@ -319,39 +416,54 @@ public class RespaldoService {
         } catch (IOException e) {
             throw new IllegalArgumentException("No se pudo guardar el archivo importado: " + e.getMessage());
         }
-        return encolarOperacion(OPER_IMPORTACION, "importacion", destino, "Importación de " + destino.getFileName());
+        try {
+            return encolarOperacion(OPER_IMPORTACION, "importacion", destino, "Importación de " + destino.getFileName());
+        } catch (RuntimeException e) {
+            // Si perdimos la carrera por el bloqueo, no dejamos el archivo huérfano.
+            borrarSilencioso(destino);
+            throw e;
+        }
     }
 
     private Map<String, Object> encolarOperacion(String oper, String motivo, Path archivo, String nota) {
         if (!ocupado.compareAndSet(false, true)) {
             throw new IllegalStateException("Ya hay una operación en curso (" + operacion.get() + "). Espera a que termine.");
         }
-        if (archivo == null || !Files.isRegularFile(archivo)) {
-            ocupado.set(false);
-            throw new IllegalArgumentException("El archivo indicado no existe");
-        }
-        Respaldo r = new Respaldo();
-        r.setTipo(Respaldo.TIPO_MANUAL);
-        r.setEstado(Respaldo.ESTADO_EN_PROGRESO);
-        r.setMotivo(motivo);
-        r.setArchivo(archivo.getFileName().toString());
-        r.setRuta(archivo.toString());
-        r.setMotor(db.conexion().motor());
-        r.setVersion(VERSION);
-        r.setIniciadoEn(LocalDateTime.now());
-        r.setTokenEjecucion(UUID.randomUUID().toString());
-        r.setMensaje(nota);
-        r = repo.save(r);
-
-        final Long id = r.getId();
-        final boolean gz = archivo.getFileName().toString().toLowerCase().endsWith(".gz");
         operacion.set(oper);
-        enCursoId.set(id);
-        worker.submit(() -> ejecutarGuarded(id, () -> ejecutarRestauracion(id, archivo, gz, oper)));
-        return resumen(id);
+        enCursoId.set(0);
+        try {
+            if (archivo == null || !Files.isRegularFile(archivo)) {
+                throw new IllegalArgumentException("El archivo indicado no existe");
+            }
+            Respaldo r = new Respaldo();
+            r.setTipo(Respaldo.TIPO_MANUAL);
+            r.setEstado(Respaldo.ESTADO_EN_PROGRESO);
+            r.setMotivo(motivo);
+            r.setArchivo(archivo.getFileName().toString());
+            r.setRuta(archivo.toString());
+            r.setMotor(db.conexion().motor());
+            r.setVersion(VERSION);
+            r.setIniciadoEn(LocalDateTime.now());
+            r.setTokenEjecucion(UUID.randomUUID().toString());
+            r.setMensaje(nota);
+            r = repo.save(r);
+
+            final Long id = r.getId();
+            final boolean gz = archivo.getFileName().toString().toLowerCase().endsWith(".gz");
+            enCursoId.set(id);
+            worker.submit(() -> ejecutarGuarded(id, () -> ejecutarRestauracion(id, archivo, gz, oper)));
+            return resumen(id);
+        } catch (RuntimeException e) {
+            liberar();
+            throw e;
+        }
     }
 
     private void ejecutarRestauracion(Long id, Path src, boolean gz, String oper) {
+        if (db.esArchivo()) {
+            ejecutarRestauracionSqlite(id, src, gz, oper);
+            return;
+        }
         Respaldo r = repo.findById(id).orElseThrow();
         long t0 = System.currentTimeMillis();
         Path tmp = null;
@@ -368,7 +480,7 @@ public class RespaldoService {
 
             // 2) Restaurar (el cliente lee el SQL por stdin; nunca DROP DATABASE).
             String bin = cfg.binCliente();
-            if (bin == null) throw new IllegalStateException("No se encontró el cliente mariadb.exe/mysql.exe");
+            if (bin == null) throw new IllegalStateException("No se encontró el cliente de la base de datos (mysql/mariadb) para restaurar");
             tmp = archivoDefaults();
 
             List<String> cmd = new ArrayList<>();
@@ -405,10 +517,149 @@ public class RespaldoService {
         }
     }
 
+    /**
+     * Restauración SQLite EN CALIENTE: se descomprime el respaldo a un archivo
+     * temporal y, con {@code ATTACH}, se copian sus tablas sobre la base viva
+     * dentro de una transacción (no se puede reemplazar el archivo: la app lo tiene
+     * abierto). Se preservan las tablas del propio módulo de respaldos
+     * ({@code respaldos} y {@code config_respaldo}) para no perder el historial.
+     */
+    private void ejecutarRestauracionSqlite(Long id, Path src, boolean gz, String oper) {
+        Respaldo r = repo.findById(id).orElseThrow();
+        long t0 = System.currentTimeMillis();
+        Path staging = null;
+        try {
+            // 1) Red de seguridad: respaldo de la base actual ANTES de tocarla.
+            Long seguridadId = respaldoSeguroSincrono(OPER_IMPORTACION.equals(oper)
+                    ? Respaldo.MOTIVO_PRE_IMPORTACION : Respaldo.MOTIVO_PRE_RESTAURACION);
+            if (seguridadId == null) {
+                throw new IllegalStateException("No se pudo crear el respaldo de seguridad previo; "
+                        + "se cancela la operación para no perder datos.");
+            }
+
+            // 2) Descomprimir el respaldo a un archivo temporal.
+            staging = Files.createTempFile("crow-restore-", ".db");
+            try (InputStream raw = new BufferedInputStream(Files.newInputStream(src));
+                 InputStream in = gz ? new GZIPInputStream(raw, 1 << 16) : raw;
+                 OutputStream out = Files.newOutputStream(staging)) {
+                in.transferTo(out);
+            }
+
+            // 3) Validar y copiar sobre la base viva.
+            int tablas = copiarDesdeSqlite(staging);
+
+            r.setEstado(Respaldo.ESTADO_COMPLETADO);
+            r.setTerminadoEn(LocalDateTime.now());
+            r.setDuracionMs(System.currentTimeMillis() - t0);
+            r.setMensaje((r.getMensaje() == null ? "" : r.getMensaje() + " · ")
+                    + "Completada (" + tablas + " tablas). Se hizo un respaldo de seguridad antes (id "
+                    + seguridadId + ").");
+            repo.save(r);
+            log.info("{} SQLite completada: {} ({} tablas)", oper, src.getFileName(), tablas);
+        } catch (Exception e) {
+            log.error("{} SQLite falló: {}", oper, e.getMessage(), e);
+            r.setEstado(Respaldo.ESTADO_FALLO);
+            r.setTerminadoEn(LocalDateTime.now());
+            r.setDuracionMs(System.currentTimeMillis() - t0);
+            r.setMensaje(corto(e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage()));
+            repo.save(r);
+        } finally {
+            borrarSilencioso(staging);
+        }
+    }
+
+    /** Tablas del módulo de respaldos que se conservan al restaurar (no se pisan). */
+    private static final java.util.Set<String> TABLAS_RESPALDO = java.util.Set.of("respaldos", "config_respaldo");
+
+    /**
+     * Copia todas las tablas de {@code origen} (una base SQLite) sobre la base viva:
+     * {@code ATTACH} + borrar/insertar por tabla, en una transacción y con las
+     * claves foráneas desactivadas. Devuelve cuántas tablas copió.
+     */
+    private int copiarDesdeSqlite(Path origen) throws Exception {
+        int copiadas = 0;
+        try (java.sql.Connection c = db.nuevaConexion()) {
+            // Las FK se desactivan antes de la transacción (dentro no tienen efecto).
+            try (java.sql.Statement st = c.createStatement()) {
+                st.execute("PRAGMA foreign_keys=OFF");
+                st.execute("ATTACH DATABASE '" + rutaSql(origen.toAbsolutePath()) + "' AS bk");
+            }
+            try {
+                // Validar que el archivo es una base de esta app.
+                try (java.sql.Statement st = c.createStatement();
+                     java.sql.ResultSet rs = st.executeQuery(
+                             "SELECT COUNT(*) FROM bk.sqlite_master WHERE type='table' AND name='titulos'")) {
+                    if (!rs.next() || rs.getInt(1) == 0) {
+                        throw new IllegalStateException("El archivo no parece una base de datos de esta aplicación.");
+                    }
+                }
+
+                List<String> tablas = new ArrayList<>();
+                try (java.sql.Statement st = c.createStatement();
+                     java.sql.ResultSet rs = st.executeQuery(
+                             "SELECT name FROM bk.sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")) {
+                    while (rs.next()) tablas.add(rs.getString(1));
+                }
+                if (tablas.isEmpty()) throw new IllegalStateException("La base de datos del respaldo está vacía.");
+
+                boolean auto = c.getAutoCommit();
+                c.setAutoCommit(false);
+                try (java.sql.Statement st = c.createStatement()) {
+                    for (String t : tablas) {
+                        if (TABLAS_RESPALDO.contains(t)) continue;
+                        List<String> cols = columnasComunes(c, t);
+                        if (cols.isEmpty()) continue;
+                        String lista = String.join(", ", cols.stream().map(x -> q(x)).toList());
+                        st.execute("DELETE FROM main." + q(t));
+                        st.execute("INSERT INTO main." + q(t) + " (" + lista + ") SELECT " + lista
+                                + " FROM bk." + q(t));
+                        copiadas++;
+                    }
+                }
+                c.commit();
+                c.setAutoCommit(auto);
+            } finally {
+                try (java.sql.Statement st = c.createStatement()) {
+                    st.execute("DETACH DATABASE bk");
+                    st.execute("PRAGMA foreign_keys=ON");
+                }
+            }
+        }
+        return copiadas;
+    }
+
+    /** Columnas presentes tanto en la base viva como en la del respaldo (orden de la viva). */
+    private static List<String> columnasComunes(java.sql.Connection c, String tabla) throws Exception {
+        List<String> main = columnas(c, "main", tabla);
+        List<String> bk = columnas(c, "bk", tabla);
+        List<String> out = new ArrayList<>();
+        for (String col : main) {
+            if (bk.contains(col)) out.add(col);
+        }
+        return out;
+    }
+
+    private static List<String> columnas(java.sql.Connection c, String esquema, String tabla) throws Exception {
+        List<String> cols = new ArrayList<>();
+        try (java.sql.Statement st = c.createStatement();
+             java.sql.ResultSet rs = st.executeQuery("PRAGMA " + esquema + ".table_info(" + q(tabla) + ")")) {
+            while (rs.next()) cols.add(rs.getString("name"));
+        }
+        return cols;
+    }
+
+    private static String q(String ident) {
+        return "\"" + ident.replace("\"", "\"\"") + "\"";
+    }
+
+    private static String rutaSql(Path p) {
+        return p.toAbsolutePath().normalize().toString().replace('\\', '/').replace("'", "''");
+    }
+
     /** Respaldo manual síncrono (para la red de seguridad). Devuelve el id, o null si falla. */
     private Long respaldoSeguroSincrono(String motivo) {
         try {
-            if (cfg.binDump() == null) return null;
+            if (!db.esArchivo() && cfg.binDump() == null) return null;
             Respaldo s = new Respaldo();
             s.setTipo(Respaldo.TIPO_MANUAL);
             s.setEstado(Respaldo.ESTADO_EN_PROGRESO);
@@ -473,6 +724,7 @@ public class RespaldoService {
      * - Avisa de respaldos cuyo archivo ya no está en disco.
      */
     public Map<String, Object> revisarIntegridad() {
+        exigirLibre("revisar la integridad");
         int interrumpidos = 0;
         for (Respaldo r : repo.findByEstado(Respaldo.ESTADO_EN_PROGRESO)) {
             r.setEstado(Respaldo.ESTADO_INTERRUMPIDO);
@@ -556,10 +808,15 @@ public class RespaldoService {
                 repo.save(r);
             });
         } finally {
-            ocupado.set(false);
-            operacion.set(null);
-            enCursoId.set(0);
+            liberar();
         }
+    }
+
+    /** Suelta el bloqueo global de operaciones (se usa en el finally y en fallos previos al worker). */
+    public void liberar() {
+        ocupado.set(false);
+        operacion.set(null);
+        enCursoId.set(0);
     }
 
     private void exigirConfirmacion(String confirmacion) {
@@ -572,10 +829,11 @@ public class RespaldoService {
 
     private String nombreArchivo(String tipo) {
         String prefijo = Respaldo.TIPO_AUTOMATICO.equals(tipo) ? "respaldo_auto_" : "respaldo_manual_";
-        String nombre = prefijo + LocalDateTime.now().format(SELLO) + ".sql.gz";
+        String ext = db.esArchivo() ? ".db.gz" : ".sql.gz";
+        String nombre = prefijo + LocalDateTime.now().format(SELLO) + ext;
         Path dir = Respaldo.TIPO_AUTOMATICO.equals(tipo) ? cfg.dirAuto() : cfg.dirManual();
         if (Files.exists(dir.resolve(nombre))) {
-            nombre = prefijo + LocalDateTime.now().format(SELLO) + "_" + (System.nanoTime() % 1000) + ".sql.gz";
+            nombre = prefijo + LocalDateTime.now().format(SELLO) + "_" + (System.nanoTime() % 1000) + ext;
         }
         return nombre;
     }

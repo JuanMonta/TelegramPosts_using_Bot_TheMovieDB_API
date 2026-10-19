@@ -32,6 +32,20 @@ public class BootstrapBaseDatos implements ApplicationRunner {
         try {
             Bootstrap b = cfg.cargar();
             if (!b.enabled()) return;
+
+            // Motores de archivo (SQLite): se crea el archivo + esquema si falta.
+            if (!b.motorEnum().esServidor()) {
+                if (esBlanco(b.archivo())) return;
+                if (!admin.existeBase(b)) {
+                    log.info("Bootstrap: la base SQLite no existe; se creará en {}.", b.archivo());
+                    admin.crear(b);
+                    log.info("Bootstrap: base SQLite creada.");
+                } else if (admin.contarTablas(b) == 0) {
+                    admin.crearTablas(b);
+                }
+                return;
+            }
+
             if (esBlanco(b.usuarioAdmin())) return;      // sin credenciales no se auto-crea
             if (esBlanco(b.nombreBase())) return;
 

@@ -177,6 +177,28 @@
 .dt-mini-acento { border-color: rgba(46, 166, 255, 0.5); color: var(--action-hover); background: var(--action-dim); }
 .dt-mini-peligro:hover { border-color: var(--danger); color: var(--danger); }
 
+/* selector de motor de base de datos */
+.dt-motores { display: flex; gap: 10px; flex-wrap: wrap; }
+.dt-motor {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  flex: 1 1 190px;
+  padding: 10px 12px;
+  text-align: left;
+  border-radius: var(--rad-input);
+  border: 1px solid var(--hairline);
+  background: var(--bg-input);
+  color: var(--text-dimmed);
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+.dt-motor:hover { border-color: var(--action); }
+.dt-motor.sel { border-color: var(--action); background: var(--action-dim); }
+.dt-motor-t { font-size: 13px; font-weight: 700; color: var(--text-primary); }
+.dt-motor-d { font-size: 11px; line-height: 1.35; color: var(--text-dimmed); }
+
 .dt-boton {
   flex: none;
   height: 40px;
@@ -377,3 +399,46 @@
   font-style: italic;
 }
 .dt-picker-vacio.dt-error { color: var(--danger); font-style: normal; }
+
+/* ---- Motor en uso (indicador) ---- */
+.dt-motor-activo {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  border: 1px solid rgba(46, 166, 255, 0.45);
+  border-radius: var(--rad-input);
+  background: var(--action-dim);
+}
+.dt-motor-activo-k {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--text-dimmed);
+}
+.dt-motor-activo-v { font-size: 16px; font-weight: 700; color: var(--action-hover); }
+.dt-motor-activo-d { font-size: 11.5px; color: var(--text-dimmed); }
+
+/* ---- Migración de motor ---- */
+.dt-mig-caja { margin-top: 12px; display: flex; flex-direction: column; gap: 10px; }
+.dt-mig-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--rad-input);
+  background: var(--bg-input);
+}
+.dt-mig-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12.5px;
+}
+.dt-mig-filas { color: var(--text-dimmed); font-size: 12px; }
+

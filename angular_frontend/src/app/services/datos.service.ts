@@ -17,6 +17,9 @@ export interface DatosConexion {
 
 /** Conexión + resolución de rutas y binarios. */
 export interface DatosInventario extends DatosConexion {
+  motor_etiqueta: string;
+  es_servidor: boolean;
+  archivo: string | null;
   raiz_app: string;
   bin_dump: string | null;
   bin_cliente: string | null;
@@ -103,8 +106,12 @@ export interface DatosEstado {
 /** Campos del asistente de base de datos (config-db.yaml), sin contraseñas. */
 export interface BootstrapAdmin {
   archivo: string;
+  archivo_config?: string;
   existe_archivo: boolean;
   enabled: boolean;
+  motor: string;
+  motor_etiqueta?: string;
+  es_servidor?: boolean;
   host: string;
   puerto: string;
   nombre_base: string;
@@ -137,6 +144,8 @@ export interface CrearBaseResultado {
 
 /** Payload del asistente (los password vacíos conservan el valor guardado). */
 export interface BootstrapPayload {
+  motor: string;
+  archivo: string;
   host: string;
   puerto: string;
   nombre_base: string;
@@ -144,6 +153,54 @@ export interface BootstrapPayload {
   password_admin: string;
   usuario_app: string;
   password_app: string;
+  /** Solo para el asistente: confirma cambiar de motor "empezando de cero" (sin migrar). */
+  cambio_motor_confirmado?: boolean;
+}
+
+export interface MigracionMotorResumen {
+  motor: string;
+  motor_etiqueta: string;
+  es_servidor: boolean;
+  base: string;
+  archivo: string | null;
+}
+
+export interface MigracionTabla {
+  tabla: string;
+  filas?: number;
+  filas_origen?: number;
+  filas_destino?: number;
+  checksum_origen?: string;
+  checksum_destino?: string;
+  ok?: boolean;
+}
+
+export interface MigracionAnalisis {
+  ok: boolean;
+  mensaje?: string;
+  listo?: boolean;
+  origen: MigracionMotorResumen;
+  destino: MigracionMotorResumen;
+  destino_existe: boolean;
+  destino_tiene_datos: boolean;
+  destino_tablas?: string[];
+  tablas: MigracionTabla[];
+  total_filas: number;
+  avisos: string[];
+}
+
+export interface MigracionResultado {
+  ok: boolean;
+  correcto: boolean;
+  mensaje: string;
+  reiniciar: boolean;
+  tablas: MigracionTabla[];
+  errores: string[];
+}
+
+export interface MigracionPayload extends BootstrapPayload {
+  vaciar_destino: boolean;
+  confirmacion: string;
 }
 
 export interface RevisionIntegridad {
@@ -191,6 +248,16 @@ export class DatosService {
   /** Escenario B: la base ya existe; solo crea las tablas (no crea base ni usuario). */
   crearTablas(p: BootstrapPayload): Observable<CrearBaseResultado> {
     return this.api.post<CrearBaseResultado>('/api/datos/bootstrap/crear-tablas', p);
+  }
+
+  /** Migración de motor: analiza origen y destino sin tocar nada. */
+  analizarMigracion(p: BootstrapPayload): Observable<MigracionAnalisis> {
+    return this.api.post<MigracionAnalisis>('/api/datos/migracion/analizar', p);
+  }
+
+  /** Migración de motor: copia, verifica y (si cuadra) cambia la conexión. */
+  migrarMotores(p: MigracionPayload): Observable<MigracionResultado> {
+    return this.api.post<MigracionResultado>('/api/datos/migracion/migrar', p);
   }
 
   guardarConfig(cfg: Partial<RespaldoConfig>): Observable<RespaldoConfig & { inventario: DatosInventario }> {

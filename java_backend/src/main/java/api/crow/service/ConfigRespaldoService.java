@@ -48,6 +48,7 @@ public class ConfigRespaldoService implements ApplicationRunner {
 
     private final ConfigRespaldoRepository repo;
     private final ConfigCifradoService cifrado;
+    private final BaseDatosService db;
 
     /** true cuando algún campo de config_respaldo no se pudo descifrar (clave cambiada). */
     private volatile boolean claveInvalida = false;
@@ -82,11 +83,13 @@ public class ConfigRespaldoService implements ApplicationRunner {
 
     /** Ruta completa a mariadb-dump(.exe) o mysqldump(.exe), o null si no se encuentra. */
     public String binDump() {
+        if (db.esArchivo()) return null;   // SQLite no usa herramientas externas
         return resolverBin(cargar().binDir(), BIN_DUMP);
     }
 
     /** Ruta completa al cliente mariadb(.exe)/mysql(.exe) para restaurar, o null. */
     public String binCliente() {
+        if (db.esArchivo()) return null;
         return resolverBin(cargar().binDir(), BIN_CLIENTE);
     }
 
@@ -163,16 +166,20 @@ public class ConfigRespaldoService implements ApplicationRunner {
                     + "(así no se mezclan en el historial)");
         }
         String binDir = c.binDir() == null ? "" : c.binDir().trim();
-        if (!binDir.isEmpty()) {
-            if (!Files.isDirectory(Path.of(binDir))) {
-                throw new IllegalArgumentException("La carpeta de programas de MariaDB no existe: " + binDir);
+        // SQLite no usa herramientas externas: la carpeta bin no aplica.
+        if (!db.esArchivo()) {
+            if (!binDir.isEmpty()) {
+                if (!Files.isDirectory(Path.of(binDir))) {
+                    throw new IllegalArgumentException("La carpeta de programas de la base de datos no existe: " + binDir);
+                }
+                if (resolverBin(binDir, BIN_DUMP) == null) {
+                    throw new IllegalArgumentException("No se encontró la herramienta de volcado "
+                            + "(mysqldump o mariadb-dump) en " + binDir);
+                }
+            } else if (dirBinDetectado() == null) {
+                throw new IllegalArgumentException("No se encontró la herramienta de volcado (mysqldump o mariadb-dump) "
+                        + "en el sistema. Indica la carpeta bin de tu instalación (MariaDB o MySQL).");
             }
-            if (resolverBin(binDir, BIN_DUMP) == null) {
-                throw new IllegalArgumentException("No se encontró mariadb-dump.exe ni mysqldump.exe en " + binDir);
-            }
-        } else if (dirBinDetectado() == null) {
-            throw new IllegalArgumentException("No se encontró mariadb-dump.exe en el sistema. "
-                    + "Indica la carpeta bin de tu instalación de MariaDB.");
         }
 
         ConfigRespaldo e = repo.findById(ConfigRespaldo.ID).orElseGet(ConfigRespaldo::new);
@@ -323,6 +330,13 @@ public class ConfigRespaldoService implements ApplicationRunner {
         }
         dirs.addAll(glob("C:\\Program Files", "MariaDB*", "bin"));
         dirs.addAll(glob("C:\\Program Files (x86)", "MariaDB*", "bin"));
+        // MySQL 8 (instalador típico en Archivos de programa).
+        dirs.addAll(glob("C:\\Program Files\\MySQL", "MySQL Server*", "bin"));
+        dirs.addAll(glob("C:\\Program Files (x86)\\MySQL", "MySQL Server*", "bin"));
+        String mysqlHome = System.getenv("MYSQL_HOME");
+        if (mysqlHome != null && !mysqlHome.isBlank()) {
+            dirs.add(Path.of(mysqlHome.trim()).resolve("bin"));
+        }
 
         for (Path d : dirs) {
             for (String n : nombres) {

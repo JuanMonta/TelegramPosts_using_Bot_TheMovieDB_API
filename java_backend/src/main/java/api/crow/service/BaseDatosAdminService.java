@@ -2,6 +2,7 @@ package api.crow.service;
 
 import api.crow.config.ConfigBootstrapDb;
 import api.crow.config.ConfigBootstrapDb.Bootstrap;
+import api.crow.config.MotorBd;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -11,7 +12,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -56,12 +56,16 @@ public class BaseDatosAdminService {
     public Map<String, Object> resumen() {
         Bootstrap b = cfgBootstrap.cargar();
         Map<String, Object> m = new LinkedHashMap<>();
-        m.put("archivo", cfgBootstrap.archivo().toString());
+        m.put("archivo_config", cfgBootstrap.archivo().toString());
         m.put("existe_archivo", Files.isRegularFile(cfgBootstrap.archivo()));
         m.put("enabled", b.enabled());
+        m.put("motor", b.motorEnum().clave());
+        m.put("motor_etiqueta", b.motorEnum().etiqueta());
+        m.put("es_servidor", b.motorEnum().esServidor());
         m.put("host", b.host());
         m.put("puerto", b.puerto());
         m.put("nombre_base", b.nombreBase());
+        m.put("archivo", b.archivo());
         m.put("usuario_admin", b.usuarioAdmin());
         m.put("tiene_password_admin", !b.passwordAdmin().isEmpty());
         m.put("usuario_app", b.usuarioApp());
@@ -71,6 +75,7 @@ public class BaseDatosAdminService {
 
     /** Prueba la conexión contra el servidor (sin base seleccionada) y detecta el escenario. */
     public PruebaAdmin probarAdmin(Bootstrap b) {
+        if (!b.motorEnum().esServidor()) return probarAdminSqlite(b);
         if (esBlanco(b.usuarioAdmin())) {
             return new PruebaAdmin(false, "Indica el usuario de administrador (ej. root).",
                     null, false, null, null, null, null);
@@ -91,8 +96,34 @@ public class BaseDatosAdminService {
             return new PruebaAdmin(true, mensajePrueba(b, existe, tablas, puedeBase, puedeTablas, appExiste),
                     version, existe, tablas, puedeBase, puedeTablas, appExiste);
         } catch (Exception e) {
-            return new PruebaAdmin(false, mensajeAdmin(e), null, false, null, null, null, null);
+            return new PruebaAdmin(false, mensajeAdmin(e, b), null, false, null, null, null, null);
         }
+    }
+
+    /**
+     * SQLite no tiene servidor ni credenciales: se comprueba la ruta del archivo.
+     * Si el archivo ya existe con tablas, no se tocará; si no existe, se puede crear.
+     */
+    private PruebaAdmin probarAdminSqlite(Bootstrap b) {
+        String archivo = b.archivo();
+        if (esBlanco(archivo)) {
+            return new PruebaAdmin(false, "Indica dónde guardar el archivo de la base de datos.",
+                    null, false, null, null, null, null);
+        }
+        boolean tieneTablas = tieneTablasSqlite(archivo);
+        boolean existeArchivo = Files.isRegularFile(Path.of(archivo));
+        String version = existeArchivo ? versionSqlite(archivo) : null;
+        Long tablas = tieneTablas ? contarTablasSqlite(archivo) : null;
+        String mensaje;
+        if (tieneTablas) {
+            mensaje = "La base de datos ya existe" + tablasTxt(tablas) + " en: " + archivo
+                    + ". No se tocará. Para empezar de cero, elige otra ubicación o borra ese archivo.";
+        } else if (existeArchivo) {
+            mensaje = "El archivo existe pero aún no tiene la base de datos. Se crearán las tablas en: " + archivo;
+        } else {
+            mensaje = "Todo listo para crear la base de datos en: " + archivo;
+        }
+        return new PruebaAdmin(true, mensaje, version, tieneTablas, tablas, true, true, null);
     }
 
     /** Redacta el diagnóstico según el escenario (A: puede crear base; B: usuario restringido). */
@@ -130,6 +161,7 @@ public class BaseDatosAdminService {
 
     /** true si la base indicada ya existe (o si no se puede comprobar). */
     public boolean existeBase(Bootstrap b) {
+        if (!b.motorEnum().esServidor()) return tieneTablasSqlite(b.archivo());
         if (esBlanco(b.nombreBase())) return false;
         try (Connection c = abrirSinBase(b)) {
             return existeBase(c, b.nombreBase());
@@ -140,8 +172,9 @@ public class BaseDatosAdminService {
 
     /** Crea la base, aplica el esquema y el usuario de la app. Persiste la conexión. */
     public Map<String, Object> crear(Bootstrap b) {
+        if (!b.motorEnum().esServidor()) return crearSqlite(b, false);
         validar(b);
-        String ddl = leerEsquema();
+        String ddl = leerEsquema(b);
         try (Connection c = abrirSinBase(b)) {
             if (existeBase(c, b.nombreBase())) {
                 throw new IllegalArgumentException("La base de datos '" + b.nombreBase()
@@ -176,8 +209,8 @@ public class BaseDatosAdminService {
             ejecutar(c, "FLUSH PRIVILEGES");
 
             // Deja escrita la conexión para que al reiniciar la app use esta base.
-            cfgBootstrap.guardar(new Bootstrap(true, b.host(), b.puerto(), b.usuarioAdmin(),
-                    b.passwordAdmin(), b.nombreBase(), b.usuarioApp(), b.passwordApp()));
+            cfgBootstrap.guardar(new Bootstrap(true, b.motor(), b.host(), b.puerto(), b.usuarioAdmin(),
+                    b.passwordAdmin(), b.nombreBase(), b.usuarioApp(), b.passwordApp(), b.archivo()));
 
             log.info("Base de datos '{}' creada con {} tablas y usuario '{}'@'localhost'.",
                     b.nombreBase(), tablas, b.usuarioApp());
@@ -194,7 +227,7 @@ public class BaseDatosAdminService {
         } catch (IllegalArgumentException e) {
             throw e;
         } catch (SQLException e) {
-            throw new IllegalStateException("No se pudo crear la base: " + mensajeAdmin(e));
+            throw new IllegalStateException("No se pudo crear la base: " + mensajeAdmin(e, b));
         }
     }
 
@@ -204,8 +237,9 @@ public class BaseDatosAdminService {
      * la base, ni el usuario, ni otorga permisos. Persiste la conexión de la app.
      */
     public Map<String, Object> crearTablas(Bootstrap b) {
+        if (!b.motorEnum().esServidor()) return crearSqlite(b, true);
         validarBase(b);
-        String ddl = leerEsquema();
+        String ddl = leerEsquema(b);
         try (Connection c = abrirConBase(b)) {
             if (Boolean.FALSE.equals(puedeCrearTablas(c, b.nombreBase()))) {
                 throw new IllegalStateException("El usuario '" + b.usuarioAdmin() + "' no tiene permiso CREATE "
@@ -217,8 +251,8 @@ public class BaseDatosAdminService {
             boolean dedicado = !esBlanco(b.usuarioApp());
             String uApp = dedicado ? b.usuarioApp() : b.usuarioAdmin();
             String pApp = dedicado ? b.passwordApp() : b.passwordAdmin();
-            cfgBootstrap.guardar(new Bootstrap(true, b.host(), b.puerto(), b.usuarioAdmin(),
-                    b.passwordAdmin(), b.nombreBase(), uApp, pApp));
+            cfgBootstrap.guardar(new Bootstrap(true, b.motor(), b.host(), b.puerto(), b.usuarioAdmin(),
+                    b.passwordAdmin(), b.nombreBase(), uApp, pApp, b.archivo()));
 
             log.info("Tablas aseguradas en la base existente '{}' ({} sentencias) por '{}'.",
                     b.nombreBase(), tablas, b.usuarioAdmin());
@@ -235,12 +269,55 @@ public class BaseDatosAdminService {
         } catch (IllegalArgumentException | IllegalStateException e) {
             throw e;
         } catch (SQLException e) {
-            throw new IllegalStateException("No se pudieron crear las tablas: " + mensajeAdmin(e));
+            throw new IllegalStateException("No se pudieron crear las tablas: " + mensajeAdmin(e, b));
+        }
+    }
+
+    /**
+     * Crea (o asegura) la base SQLite: abre/crea el archivo y aplica el esquema.
+     * No hay usuarios ni permisos. Si el archivo ya tiene la base y
+     * {@code permitirExistente} es false, se rechaza para no pisar datos.
+     */
+    private Map<String, Object> crearSqlite(Bootstrap b, boolean permitirExistente) {
+        String archivo = b.archivo();
+        if (esBlanco(archivo)) {
+            throw new IllegalArgumentException("Indica dónde guardar el archivo de la base de datos.");
+        }
+        Path p = Path.of(archivo).toAbsolutePath().normalize();
+        if (Files.isRegularFile(p) && tieneTablasSqlite(archivo) && !permitirExistente) {
+            throw new IllegalArgumentException("La base de datos ya existe (" + p + "). No se toca nada. "
+                    + "Elige otra ubicación o borra ese archivo para empezar de cero.");
+        }
+        String base = esBlanco(b.nombreBase()) ? ConfigBootstrapDb.nombreDeArchivo(archivo) : b.nombreBase();
+        String ddl = leerEsquema(b);
+        try (Connection c = abrirSqlite(archivo)) {
+            aplicarEsquema(c, ddl);
+            long tablas = cuenta(c, "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'");
+
+            cfgBootstrap.guardar(new Bootstrap(true, b.motor(), "", "", "", "", base, "", "", p.toString()));
+
+            log.info("Base SQLite '{}' lista ({} tablas).", p, tablas);
+
+            Map<String, Object> out = new LinkedHashMap<>();
+            out.put("ok", true);
+            out.put("base", base);
+            out.put("tablas", tablas);
+            out.put("host", "");
+            out.put("puerto", "");
+            out.put("usuario_app", "");
+            out.put("mensaje", "Base de datos creada. Reinicia la aplicación para conectarte a ella.");
+            return out;
+        } catch (SQLException e) {
+            throw new IllegalStateException("No se pudo crear la base SQLite: " + e.getMessage());
         }
     }
 
     /** Cantidad de tablas en la base indicada (0 si no existe o no se puede consultar). */
     public long contarTablas(Bootstrap b) {
+        if (!b.motorEnum().esServidor()) {
+            Long n = contarTablasSqlite(b.archivo());
+            return n == null ? 0 : n;
+        }
         if (esBlanco(b.nombreBase())) return 0;
         try (Connection c = abrirSinBase(b)) {
             Long n = largo(c, "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = ?", b.nombreBase());
@@ -254,6 +331,7 @@ public class BaseDatosAdminService {
 
     private void validar(Bootstrap b) {
         validarBase(b);
+        if (!b.motorEnum().esServidor()) return;   // SQLite: sin usuario/contraseña de app
         if (esBlanco(b.usuarioApp()) || esBlanco(b.passwordApp())) {
             throw new IllegalArgumentException("Indica el usuario y la contraseña que usará la aplicación.");
         }
@@ -264,6 +342,12 @@ public class BaseDatosAdminService {
 
     /** Validaciones comunes (escenario A y B). */
     private void validarBase(Bootstrap b) {
+        if (!b.motorEnum().esServidor()) {
+            if (esBlanco(b.archivo())) {
+                throw new IllegalArgumentException("Indica dónde guardar el archivo de la base de datos.");
+            }
+            return;
+        }
         if (esBlanco(b.nombreBase()) || !b.nombreBase().matches("[A-Za-z0-9_]{1,64}")) {
             throw new IllegalArgumentException("El nombre de la base solo admite letras, números y _ (máx. 64).");
         }
@@ -284,13 +368,60 @@ public class BaseDatosAdminService {
     }
 
     private Connection abrir(Bootstrap b, String base) throws SQLException {
-        String url = "jdbc:mariadb://" + b.host() + ":" + b.puerto() + "/" + (base == null ? "" : base);
+        if (!b.motorEnum().esServidor()) return abrirSqlite(b.archivo());
+        String url = b.motorEnum().prefijoUrl() + b.host() + ":" + b.puerto() + "/" + (base == null ? "" : base);
         Properties p = new Properties();
         p.setProperty("user", b.usuarioAdmin());
         p.setProperty("password", b.passwordAdmin() == null ? "" : b.passwordAdmin());
         p.setProperty("connectTimeout", "6000");
         p.setProperty("loginTimeout", "6");
-        return DriverManager.getConnection(url, p);
+        return b.motorEnum().conectar(url, p);
+    }
+
+    /** Abre (y crea si hace falta, junto con su carpeta) el archivo de SQLite. */
+    private Connection abrirSqlite(String archivo) throws SQLException {
+        if (esBlanco(archivo)) throw new SQLException("Falta la ruta del archivo de SQLite.");
+        Path p = Path.of(archivo).toAbsolutePath().normalize();
+        try {
+            Path dir = p.getParent();
+            if (dir != null) Files.createDirectories(dir);
+        } catch (IOException e) {
+            throw new SQLException("No se pudo crear la carpeta de la base de datos: " + e.getMessage(), e);
+        }
+        String url = MotorBd.SQLITE.prefijoUrl() + p + MotorBd.SQLITE.parametrosUrl();
+        return MotorBd.SQLITE.conectar(url, new Properties());
+    }
+
+    /** true si el archivo SQLite existe y ya tiene tablas propias (no internas). */
+    private boolean tieneTablasSqlite(String archivo) {
+        if (esBlanco(archivo) || !Files.isRegularFile(Path.of(archivo))) return false;
+        try (Connection c = abrirSqlite(archivo)) {
+            return cuenta(c, "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'") > 0;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private Long contarTablasSqlite(String archivo) {
+        try (Connection c = abrirSqlite(archivo)) {
+            return cuenta(c, "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'");
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private String versionSqlite(String archivo) {
+        try (Connection c = abrirSqlite(archivo)) {
+            return texto(c, "SELECT sqlite_version()");
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private long cuenta(Connection c, String sql) throws SQLException {
+        try (Statement st = c.createStatement(); ResultSet rs = st.executeQuery(sql)) {
+            return rs.next() ? rs.getLong(1) : 0;
+        }
     }
 
     private boolean existeBase(Connection c, String base) throws SQLException {
@@ -319,13 +450,13 @@ public class BaseDatosAdminService {
 
     /** ¿Las credenciales dadas sirven para conectar al servidor? (para validar un usuario que ya existe). */
     private boolean puedeConectar(String usuario, String password, Bootstrap b) {
-        String url = "jdbc:mariadb://" + b.host() + ":" + b.puerto() + "/";
+        String url = b.motorEnum().prefijoUrl() + b.host() + ":" + b.puerto() + "/";
         Properties p = new Properties();
         p.setProperty("user", usuario);
         p.setProperty("password", password == null ? "" : password);
         p.setProperty("connectTimeout", "6000");
         p.setProperty("loginTimeout", "6");
-        try (Connection ignored = DriverManager.getConnection(url, p)) {
+        try (Connection ignored = b.motorEnum().conectar(url, p)) {
             return true;
         } catch (SQLException e) {
             return false;
@@ -409,12 +540,13 @@ public class BaseDatosAdminService {
         return n;
     }
 
-    /** Lee el DDL canónico (database/schema.sql) desde la raíz del proyecto. */
-    private String leerEsquema() {
-        Path sql = cfgRespaldos.raizApp().resolve("database").resolve("schema.sql");
+    /** Lee el DDL canónico (schema.sql o schema-sqlite.sql) desde la raíz del proyecto. */
+    private String leerEsquema(Bootstrap b) {
+        String nombre = b.motorEnum().esServidor() ? "schema.sql" : "schema-sqlite.sql";
+        Path sql = cfgRespaldos.raizApp().resolve("database").resolve(nombre);
         if (!Files.isRegularFile(sql)) {
             throw new IllegalStateException("No se encontró el esquema: " + sql
-                    + ". Debe existir database/schema.sql en la raíz del proyecto.");
+                    + ". Debe existir database/" + nombre + " en la raíz del proyecto.");
         }
         try {
             return Files.readString(sql, StandardCharsets.UTF_8);
@@ -441,7 +573,8 @@ public class BaseDatosAdminService {
         return out;
     }
 
-    private String mensajeAdmin(Exception e) {
+    private String mensajeAdmin(Exception e, Bootstrap b) {
+        String motor = b.motorEnum().etiqueta();
         String m = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
         if (m.contains("Access denied") && m.contains("database")) {
             return "Acceso denegado: el usuario no tiene permisos sobre esa base de datos.";
@@ -451,13 +584,22 @@ public class BaseDatosAdminService {
             return "El usuario no tiene permiso para crear tablas en esa base. "
                     + "Pide al administrador que le otorgue el permiso CREATE.";
         }
+        if (m.contains("Public Key Retrieval is not allowed")) {
+            return "El servidor MySQL exige una conexión cifrada para validar la contraseña. "
+                    + "Activa SSL en el servidor o permite la descarga de la clave pública.";
+        }
         if (m.contains("Unknown database")) {
             return "La base de datos indicada no existe. Créala primero o usa credenciales de administrador.";
         }
-        if (m.contains("Connection refused") || m.contains("Could not connect")) {
-            return "El servidor no responde. ¿Está encendido MariaDB y en el host/puerto correctos?";
+        if (m.contains("Connection refused") || m.contains("Could not connect")
+                || m.contains("Communications link failure")) {
+            return "El servidor no responde. ¿Está encendido " + motor + " y en el host/puerto correctos?";
         }
         if (m.contains("Unknown host")) return "No se encontró el host indicado.";
+        if (m.contains("auth_gssapi_client") || m.contains("Unable to load authentication plugin")) {
+            return "El servidor en ese host/puerto no parece ser " + motor
+                    + ". Comprueba que elegiste el motor correcto arriba (MariaDB o MySQL).";
+        }
         return m;
     }
 
