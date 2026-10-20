@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit, ViewChild } from '@angular/core';
+import { Component, HostListener, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Location } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
@@ -52,6 +52,11 @@ export class PostComponent implements OnInit, OnDestroy {
 
   imagenes: PublicacionMedia[] = [];
   subiendo = 0;
+  arrastrando: number | null = null;
+  dropDestino: number | null = null;
+  sobreZonaPegado = false;
+  arrastrandoArchivos = false;
+  pegadoReciente = false;
 
   // selector de imágenes de TMDB
   tmdbAbierto = false;
@@ -66,6 +71,7 @@ export class PostComponent implements OnInit, OnDestroy {
   links: FilaLink[] = [];
   nuevoTexto = '';
   nuevaUrl = '';
+  nuevaTerabox = '';
 
   plantillas: CaptionTemplate[] = [];
   plantillaSeleccionada: CaptionTemplate | null = null;
@@ -98,6 +104,8 @@ export class PostComponent implements OnInit, OnDestroy {
 
   private killed = new Subject<void>();
   private temporizadorCaption: number | undefined;
+  private temporizadorPegado: number | undefined;
+  private temporizadorOrden: number | undefined;
   private colaPollTimer: number | undefined;
 
   constructor(
@@ -140,6 +148,12 @@ export class PostComponent implements OnInit, OnDestroy {
       this.temporizadorCaption = undefined;
       this.salvarCaption(true);
     }
+    if (this.temporizadorOrden !== undefined) {
+      window.clearTimeout(this.temporizadorOrden);
+      this.temporizadorOrden = undefined;
+      this.enviarOrden(true);
+    }
+    if (this.temporizadorPegado !== undefined) window.clearTimeout(this.temporizadorPegado);
     if (this.colaPollTimer !== undefined) window.clearInterval(this.colaPollTimer);
     this.killed.next();
     this.killed.complete();
@@ -182,6 +196,93 @@ export class PostComponent implements OnInit, OnDestroy {
     const input = event.target as HTMLInputElement;
     const files = Array.from(input.files ?? []);
     input.value = '';
+    this.subirLote(files);
+  }
+
+  @HostListener('window:paste', ['$event'])
+  alPegar(ev: ClipboardEvent): void {
+    if (this.cargando || this.errorBackend) return;
+    const datos = ev.clipboardData;
+    if (!datos) return;
+    const files: File[] = [];
+    for (let i = 0; i < datos.items.length; i++) {
+      const it = datos.items[i];
+      if (it.kind === 'file' && it.type.startsWith('image/')) {
+        const f = it.getAsFile();
+        if (f) files.push(this.nombrePegado(f, files.length));
+      }
+    }
+    if (!files.length) return;
+    ev.preventDefault();
+    if (this.imagenes.length < 10) this.marcarPegado();
+    this.subirLote(files);
+  }
+
+  private marcarPegado(): void {
+    this.pegadoReciente = true;
+    if (this.temporizadorPegado !== undefined) window.clearTimeout(this.temporizadorPegado);
+    this.temporizadorPegado = window.setTimeout(() => {
+      this.pegadoReciente = false;
+      this.temporizadorPegado = undefined;
+    }, 1000);
+  }
+
+  // ---- arrastrar archivos desde la PC ----
+
+  private esArrastreDeArchivos(ev: DragEvent): boolean {
+    const tipos = ev.dataTransfer?.types;
+    return !!tipos && Array.from(tipos).includes('Files');
+  }
+
+  alEntrarArchivos(ev: DragEvent): void {
+    if (!this.esArrastreDeArchivos(ev)) return;
+    ev.preventDefault();
+    this.arrastrandoArchivos = true;
+  }
+
+  alPasarArchivos(ev: DragEvent): void {
+    if (!this.esArrastreDeArchivos(ev)) return;
+    ev.preventDefault();
+    if (ev.dataTransfer) ev.dataTransfer.dropEffect = 'copy';
+    this.arrastrandoArchivos = true;
+  }
+
+  alSalirArchivos(ev: DragEvent): void {
+    if (!this.arrastrandoArchivos) return;
+    const el = ev.currentTarget as HTMLElement | null;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const fuera = ev.clientX < r.left || ev.clientX >= r.right || ev.clientY < r.top || ev.clientY >= r.bottom;
+    if (fuera) this.arrastrandoArchivos = false;
+  }
+
+  alSoltarArchivos(ev: DragEvent): void {
+    if (!this.esArrastreDeArchivos(ev)) return;
+    ev.preventDefault();
+    this.arrastrandoArchivos = false;
+    const todos = Array.from(ev.dataTransfer?.files ?? []);
+    const files = todos.filter((f) => f.type.startsWith('image/'));
+    if (!files.length) {
+      this.snack.open('Suelta archivos de imagen (JPG, PNG, WEBP…).', 'OK', { duration: 4000 });
+      return;
+    }
+    if (files.length < todos.length) {
+      this.snack.open('Se ignoraron los archivos que no son imágenes.', 'OK', { duration: 4000 });
+    }
+    this.subirLote(files);
+  }
+
+  private nombrePegado(f: File, n: number): File {
+    let ext = (f.type.split('/')[1] || 'png').toLowerCase();
+    if (ext === 'jpeg') ext = 'jpg';
+    if (ext === 'svg+xml') ext = 'svg';
+    const d = new Date();
+    const p = (v: number) => String(v).padStart(2, '0');
+    const sello = `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
+    return new File([f], `pegado-${sello}-${n + 1}.${ext}`, { type: f.type });
+  }
+
+  private subirLote(files: File[]): void {
     if (!files.length) return;
     const libres = 10 - this.imagenes.length;
     if (libres <= 0) {
@@ -223,11 +324,81 @@ export class PostComponent implements OnInit, OnDestroy {
     const i = this.imagenes.indexOf(m);
     const j = i + dir;
     if (i < 0 || j < 0 || j >= this.imagenes.length) return;
-    [this.imagenes[i], this.imagenes[j]] = [this.imagenes[j], this.imagenes[i]];
+    const arr = [...this.imagenes];
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+    this.imagenes = arr;
+    this.guardarOrden();
+  }
+
+  onDragStart(i: number, ev: DragEvent): void {
+    this.arrastrando = i;
+    this.dropDestino = i;
+    if (ev.dataTransfer) {
+      ev.dataTransfer.effectAllowed = 'move';
+      ev.dataTransfer.setData('text/plain', String(i));
+    }
+  }
+
+  onDragOver(i: number, ev: DragEvent): void {
+    if (this.arrastrando === null) return;
+    ev.preventDefault();
+    if (ev.dataTransfer) ev.dataTransfer.dropEffect = 'move';
+    this.dropDestino = i;
+  }
+
+  onDragLeave(i: number, ev: DragEvent): void {
+    const el = ev.currentTarget as HTMLElement | null;
+    const hacia = ev.relatedTarget as Node | null;
+    if (el && hacia && el.contains(hacia)) return;
+    if (this.dropDestino === i) this.dropDestino = null;
+  }
+
+  onDrop(i: number, ev: DragEvent): void {
+    if (this.arrastrando === null) return;
+    ev.preventDefault();
+    const desde = this.arrastrando;
+    this.limpiarArrastre();
+    if (desde === i) return;
+    const arr = [...this.imagenes];
+    const [mov] = arr.splice(desde, 1);
+    arr.splice(i, 0, mov);
+    this.imagenes = arr;
+    this.guardarOrden();
+  }
+
+  onDragEnd(): void {
+    this.limpiarArrastre();
+  }
+
+  private limpiarArrastre(): void {
+    this.arrastrando = null;
+    this.dropDestino = null;
+  }
+
+  trackByImagen(_i: number, m: PublicacionMedia): number {
+    return m.id;
+  }
+
+  /** Evita parpadeos: agrupa los movimientos seguidos en un solo guardado. */
+  private guardarOrden(): void {
+    if (this.temporizadorOrden !== undefined) window.clearTimeout(this.temporizadorOrden);
+    this.temporizadorOrden = window.setTimeout(() => {
+      this.temporizadorOrden = undefined;
+      this.enviarOrden();
+    }, 220);
+  }
+
+  /** No reemplaza la lista con la respuesta: el orden local ya es el correcto. */
+  private enviarOrden(sinCancelar = false): void {
     const ids = this.imagenes.map((x) => x.id);
-    this.publicacionesService.ordenarMedia(this.id, ids).pipe(takeUntil(this.killed)).subscribe({
-      next: (m) => (this.imagenes = m),
-      error: () => undefined
+    const peticion = this.publicacionesService.ordenarMedia(this.id, ids);
+    (sinCancelar ? peticion : peticion.pipe(takeUntil(this.killed))).subscribe({
+      next: () => undefined,
+      error: (e: HttpErrorResponse) => {
+        if (sinCancelar) return;
+        this.snack.open(this.api.mensajeDeError(e), 'OK', { duration: 5000 });
+        this.cargarImagenes();
+      }
     });
   }
 
@@ -320,12 +491,14 @@ export class PostComponent implements OnInit, OnDestroy {
     const texto = this.nuevoTexto.trim();
     const url = this.nuevaUrl.trim();
     if (!texto || !url) return;
+    const terabox = this.nuevaTerabox.trim();
     const orden = this.links.length ? Math.max(...this.links.map((l) => l.orden)) + 1 : 0;
-    this.publicacionesService.agregarLink(this.id, texto, url, orden).pipe(takeUntil(this.killed)).subscribe({
+    this.publicacionesService.agregarLink(this.id, texto, url, orden, terabox).pipe(takeUntil(this.killed)).subscribe({
       next: (l) => {
-        this.links.push({ id: l.id, texto: l.texto_boton, url: l.url, terabox_filename: '', orden: l.orden });
+        this.links.push({ id: l.id, texto: l.texto_boton, url: l.url, terabox_filename: l.terabox_filename ?? '', orden: l.orden });
         this.nuevoTexto = '';
         this.nuevaUrl = '';
+        this.nuevaTerabox = '';
         this.actualizarContador();
       },
       error: (e: HttpErrorResponse) => this.snack.open(this.api.mensajeDeError(e), 'OK', { duration: 5000 })

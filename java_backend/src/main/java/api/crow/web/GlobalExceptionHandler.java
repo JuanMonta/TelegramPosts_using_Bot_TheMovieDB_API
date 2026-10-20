@@ -63,7 +63,7 @@ public class GlobalExceptionHandler {
                 return error(estado, "No se pudo procesar la solicitud (" + estado.value() + ").");
             }
         }
-        log.error("Error no controlado: {}: {}", e.getClass().getSimpleName(), mensajeUsuario(e));
+        log.error("Error no controlado: {}: {}", e.getClass().getSimpleName(), mensajeUsuario(e), e);
         return error(HttpStatus.INTERNAL_SERVER_ERROR, "Error interno del servidor.");
     }
 
