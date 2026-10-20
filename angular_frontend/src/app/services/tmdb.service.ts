@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { ApiService } from './api.service';
-import { SugerenciaHit, TmdbHit, Titulo } from '../models/modelos';
+import { SugerenciaHit, TmdbHit, TmdbImagen, Titulo } from '../models/modelos';
 
 @Injectable({ providedIn: 'root' })
 export class TmdbService {
@@ -17,5 +17,10 @@ export class TmdbService {
 
   guardar(tipo: string, tmdbId: number): Observable<Titulo> {
     return this.api.get<Titulo>(`/api/tmdb/guardar?tipo=${tipo}&tmdbId=${tmdbId}`);
+  }
+
+  /** Pósters y backdrops de una película/serie para elegir en el editor. */
+  imagenes(tipo: string, tmdbId: number): Observable<TmdbImagen[]> {
+    return this.api.get<TmdbImagen[]>(`/api/tmdb/${tipo}/${tmdbId}/imagenes`);
   }
 }

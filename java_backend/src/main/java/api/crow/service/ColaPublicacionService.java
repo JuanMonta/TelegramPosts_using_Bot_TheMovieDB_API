@@ -3,9 +3,11 @@ package api.crow.service;
 import api.crow.domain.ColaPublicacion;
 import api.crow.domain.LinkVideo;
 import api.crow.domain.Publicacion;
+import api.crow.domain.PublicacionMedia;
 import api.crow.domain.Canal;
 import api.crow.repository.ColaPublicacionRepository;
 import api.crow.repository.LinkVideoRepository;
+import api.crow.repository.PublicacionMediaRepository;
 import api.crow.repository.PublicacionRepository;
 import api.crow.repository.AcoplamientoRepository;
 import api.crow.repository.CanalRepository;
@@ -13,12 +15,14 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.core.io.Resource;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -41,9 +45,15 @@ public class ColaPublicacionService implements ApplicationRunner {
      * configurado (config_app), lo que permite cambiarlo en caliente. */
     private static final long TICK_MS = 1_000;
 
+    /** Telegram permite hasta 4096 caracteres en un mensaje de texto sin foto.
+     * Autoridad única de este límite: el resto de las clases delega en {@link #limiteDe}. */
+    public static final long LIMITE_TEXTO = 4096;
+
     private final ColaPublicacionRepository cola;
     private final PublicacionRepository publicaciones;
     private final LinkVideoRepository links;
+    private final PublicacionMediaRepository mediaRepo;
+    private final MediaService mediaSvc;
     private final TelegramPublisher telegram;
     private final TelegramModoService modo;
     private final ConfigService config;
@@ -127,7 +137,7 @@ public class ColaPublicacionService implements ApplicationRunner {
             acoplamientos.findById(acoplamientoId)
                     .orElseThrow(() -> new IllegalArgumentException("El conjunto no existe"));
         }
-        long limite = config.limiteCaption();
+        long limite = limiteDe(p);
         long longitud = p.getCaption() == null ? 0 : p.getCaption().codePointCount(0, p.getCaption().length());
         if (longitud > limite) {
             throw new IllegalArgumentException("El texto supera el límite de Telegram (" + longitud + " caracteres > "
@@ -161,7 +171,7 @@ public class ColaPublicacionService implements ApplicationRunner {
         if (!ColaPublicacion.ESTADO_PENDIENTE.equals(item.getEstado())) {
             throw new IllegalArgumentException("Solo se puede reprogramar un item pendiente.");
         }
-        long limite = config.limiteCaption();
+        long limite = limiteDe(item.getPublicacion());
         long longitud = item.getPublicacion().getCaption() == null ? 0
                 : item.getPublicacion().getCaption().codePointCount(0, item.getPublicacion().getCaption().length());
         if (longitud > limite) {
@@ -184,7 +194,7 @@ public class ColaPublicacionService implements ApplicationRunner {
         if (!"borrador".equals(p.getEstado())) {
             throw new IllegalArgumentException("El post ya no es un borrador; no puede reprogramarse.");
         }
-        long limite = config.limiteCaption();
+        long limite = limiteDe(p);
         long longitud = p.getCaption() == null ? 0 : p.getCaption().codePointCount(0, p.getCaption().length());
         if (longitud > limite) {
             throw new IllegalArgumentException("El texto sigue superando el límite de Telegram (" + longitud + " > "
@@ -256,10 +266,10 @@ public class ColaPublicacionService implements ApplicationRunner {
                 return;
             }
 
-            long limite = config.limiteCaption();
+            long limite = limiteDe(p);
             long longitud = p.getCaption() == null ? 0 : p.getCaption().codePointCount(0, p.getCaption().length());
             if (longitud > limite) {
-                // Fallo sin gastar la llamada a Telegram: el caption no cabe en una foto.
+                // Fallo sin gastar la llamada a Telegram: el caption no cabe.
                 tx().executeWithoutResult(status -> {
                     ColaPublicacion c = cola.findById(item.getId()).orElse(null);
                     if (c == null) return;
@@ -272,7 +282,10 @@ public class ColaPublicacionService implements ApplicationRunner {
                 return;
             }
 
-            List<LinkVideo> enlaces = links.findByTituloIdOrderByOrdenAsc(p.getTitulo().getId());
+            List<LinkVideo> enlaces = p.getTitulo() != null
+                    ? links.findByTituloIdOrderByOrdenAsc(p.getTitulo().getId())
+                    : links.findByPublicacionIdOrderByOrdenAsc(p.getId());
+            List<Resource> fotos = recursosDe(p);
             // Igual que al publicar a mano: del conjunto solo salen los destinos
             // del modo con que se programó el item.
             List<String> canales = canalesDeAcoplamiento(item.getAcoplamientoId(), item.getModo());
@@ -286,7 +299,7 @@ public class ColaPublicacionService implements ApplicationRunner {
             }
             final Map<String, Object>[] respHolder = new Map[1];
             for (String canal : canales) {
-                respHolder[0] = telegram.sendPhoto(p, enlaces, canal);
+                respHolder[0] = telegram.enviarPost(p, enlaces, fotos, canal);
             }
 
             tx().executeWithoutResult(status -> {
@@ -309,7 +322,7 @@ public class ColaPublicacionService implements ApplicationRunner {
                 publicaciones.save(pub);
             });
             log.info("Cola: publicó '{}' en {} (msg {})",
-                    p.getTitulo().getTituloOriginal(), canales, respHolder[0].get("message_id"));
+                    nombreCorto(p), canales, respHolder[0].get("message_id"));
         } catch (Exception e) {
             log.warn("Cola: el item {} falló: {}", item.getId(), e.getMessage());
             tx().executeWithoutResult(status -> {
@@ -337,15 +350,47 @@ public class ColaPublicacionService implements ApplicationRunner {
         return new TransactionTemplate(txManager);
     }
 
+    /**
+     * Autoridad única del límite de caracteres de un post. Cuenta el póster del
+     * título como imagen (igual que {@link TelegramPublisher#enviarPost}, que usa
+     * el póster como foto cuando no hay imágenes propias), por lo que un post con
+     * título nunca supera {@code config.limiteCaption()} (1024). Con imágenes o
+     * póster: caption de foto; solo texto: {@link #LIMITE_TEXTO} (4096).
+     */
+    public long limiteDe(Publicacion p) {
+        boolean conImagen = p.getTitulo() != null || mediaRepo.countByPublicacionId(p.getId()) > 0;
+        return conImagen ? config.limiteCaption() : LIMITE_TEXTO;
+    }
+
+    private List<Resource> recursosDe(Publicacion p) {
+        List<Resource> out = new ArrayList<>();
+        for (PublicacionMedia m : mediaRepo.findByPublicacionIdOrderByOrdenAscIdAsc(p.getId())) {
+            if (m.getArchivo() != null) out.add(mediaSvc.recurso(m.getArchivo()));
+        }
+        return out;
+    }
+
+    private String nombreCorto(Publicacion p) {
+        if (p.getTitulo() != null) {
+            String latino = p.getTitulo().getTituloLatino();
+            return latino != null && !latino.isBlank() ? latino : p.getTitulo().getTituloOriginal();
+        }
+        if (p.getCaption() != null) {
+            for (String linea : p.getCaption().split("\\r?\\n")) {
+                String t = linea.trim();
+                if (!t.isEmpty()) return t.length() > 100 ? t.substring(0, 100) + "…" : t;
+            }
+        }
+        return "Post personalizado";
+    }
+
     private Map<String, Object> toMap(ColaPublicacion c) {
         Publicacion p = c.getPublicacion();
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("id", c.getId());
         m.put("publicacion_id", p.getId());
-        m.put("titulo_id", p.getTitulo().getId());
-        m.put("titulo", p.getTitulo().getTituloLatino() != null
-                ? p.getTitulo().getTituloLatino()
-                : p.getTitulo().getTituloOriginal());
+        m.put("titulo_id", p.getTitulo() == null ? null : p.getTitulo().getId());
+        m.put("titulo", nombreCorto(p));
         m.put("programado_para", c.getProgramadoPara() == null ? null : c.getProgramadoPara().toString());
         m.put("estado", c.getEstado());
         m.put("modo", c.getModo());

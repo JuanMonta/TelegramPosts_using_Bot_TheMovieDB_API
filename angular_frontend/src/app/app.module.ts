@@ -12,6 +12,7 @@ import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
 import { HomeComponent } from './components/home/home.component';
 import { DatosComponent } from './components/datos/datos.component';
 import { PublicacionComponent } from './components/publicacion/publicacion.component';
+import { PostComponent } from './components/post/post.component';
 import { ModoToggleComponent } from './components/modo-toggle/modo-toggle.component';
 import { TiraContextoComponent } from './components/tira-contexto/tira-contexto.component';
 import { AppRouteReuseStrategy } from './app-route-reuse.strategy';
@@ -24,6 +25,7 @@ import { VerClaveDirective } from './directives/ver-clave.directive';
     HomeComponent,
     DatosComponent,
     PublicacionComponent,
+    PostComponent,
     ModoToggleComponent,
     TiraContextoComponent,
     InfoDirective,

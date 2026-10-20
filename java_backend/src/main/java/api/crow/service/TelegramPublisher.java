@@ -19,10 +19,13 @@ import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClient;
 import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.node.ArrayNode;
+import tools.jackson.databind.node.ObjectNode;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -112,10 +115,88 @@ public class TelegramPublisher {
         form.add("parse_mode", "HTML");
 
         JsonNode resp = llamar("sendPhoto", form, MediaType.MULTIPART_FORM_DATA, canal, botId);
+        return parseMensaje(resp);
+    }
+
+    /**
+     * Publica un post en el canal: si no hay imágenes va como mensaje de texto,
+     * con una sola imagen como foto y con 2 a 10 como álbum (sendMediaGroup).
+     * Los posts de un título (sin imágenes propias) usan su póster como única foto.
+     */
+    public Map<String, Object> enviarPost(Publicacion publicacion, List<LinkVideo> links,
+                                          List<Resource> fotos, String canal) {
+        return enviarPost(publicacion, links, fotos, canal, null);
+    }
+
+    public Map<String, Object> enviarPost(Publicacion publicacion, List<LinkVideo> links,
+                                          List<Resource> fotos, String canal, Long botId) {
+        if (botId == null && canal != null && !canal.isBlank()) {
+            botId = botIdParaCanal(canal);
+        }
+        List<Resource> efectivas = new ArrayList<>();
+        if (fotos != null) efectivas.addAll(fotos);
+        if (efectivas.isEmpty() && publicacion.getTitulo() != null) {
+            efectivas.add(posterImagen(publicacion.getTitulo()));
+        }
+
+        String caption = captionConLinks(publicacion, links);
+        if (efectivas.isEmpty()) {
+            return enviarTexto(canal, caption, botId);
+        }
+        if (efectivas.size() == 1) {
+            MultiValueMap<String, Object> form = new LinkedMultiValueMap<>();
+            form.add("chat_id", canal);
+            form.add("photo", efectivas.get(0));
+            form.add("caption", caption);
+            form.add("parse_mode", "HTML");
+            return parseMensaje(llamar("sendPhoto", form, MediaType.MULTIPART_FORM_DATA, canal, botId));
+        }
+
+        // Álbum: hasta 10 imágenes; el caption va en la primera.
+        int n = Math.min(efectivas.size(), 10);
+        MultiValueMap<String, Object> form = new LinkedMultiValueMap<>();
+        form.add("chat_id", canal);
+        ArrayNode media = jackson.createArrayNode();
+        for (int i = 0; i < n; i++) {
+            ObjectNode item = jackson.createObjectNode();
+            item.put("type", "photo");
+            item.put("media", "attach://file" + i);
+            if (i == 0) {
+                item.put("caption", caption);
+                item.put("parse_mode", "HTML");
+            }
+            media.add(item);
+            form.add("file" + i, efectivas.get(i));
+        }
+        form.add("media", media.toString());
+        JsonNode result = llamar("sendMediaGroup", form, MediaType.MULTIPART_FORM_DATA, canal, botId);
+        if (!result.isArray() || result.isEmpty()) {
+            throw new IllegalStateException("Telegram no devolvió el álbum publicado.");
+        }
+        return parseMensaje(result.get(0));
+    }
+
+    private Map<String, Object> enviarTexto(String canal, String texto, Long botId) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("chat_id", canal);
+        body.put("text", texto);
+        body.put("parse_mode", "HTML");
+        return parseMensaje(llamar("sendMessage", body, MediaType.APPLICATION_JSON, canal, botId));
+    }
+
+    private Map<String, Object> parseMensaje(JsonNode msg) {
         Map<String, Object> out = new LinkedHashMap<>();
-        out.put("message_id", resp.path("message_id").asLong());
-        out.put("chat_id", resp.path("chat").path("id").asLong());
+        out.put("message_id", msg.path("message_id").asLong());
+        out.put("chat_id", msg.path("chat").path("id").asLong());
         return out;
+    }
+
+    private Long botIdParaCanal(String canal) {
+        return canalRepository.findAll().stream()
+                .filter(c -> canal.equals(c.getChatId()))
+                .map(Canal::getBotId)
+                .filter(java.util.Objects::nonNull)
+                .findFirst().orElse(null);
     }
 
     /**
@@ -124,7 +205,7 @@ public class TelegramPublisher {
      * Si el contenido ya es id??ntico al del mensaje, Telegram responde
      * "message is not modified" y se trata como una edici??n no-op exitosa.
      */
-    public void editarPost(Publicacion publicacion, List<LinkVideo> links) {
+    public void editarPost(Publicacion publicacion, List<LinkVideo> links, boolean conMedia) {
         if (publicacion.getTelegramMessageId() == null
                 || publicacion.getTelegramChatId() == null
                 || publicacion.getTelegramChatId().isBlank()) {
@@ -134,11 +215,12 @@ public class TelegramPublisher {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("chat_id", publicacion.getTelegramChatId());
         body.put("message_id", publicacion.getTelegramMessageId());
-        body.put("caption", captionConLinks(publicacion, links));
+        body.put(conMedia ? "caption" : "text", captionConLinks(publicacion, links));
         body.put("parse_mode", "HTML");
 
         try {
-            llamar("editMessageCaption", body, MediaType.APPLICATION_JSON, publicacion.getTelegramChatId(), null);
+            llamar(conMedia ? "editMessageCaption" : "editMessageText",
+                    body, MediaType.APPLICATION_JSON, publicacion.getTelegramChatId(), null);
         } catch (IllegalStateException e) {
             if (e.getMessage() != null && e.getMessage().contains("message is not modified")) {
                 return; // el post ya ten??a exactamente este contenido: no-op exitoso
@@ -151,7 +233,7 @@ public class TelegramPublisher {
      * Elimina el post original del canal (si existe) y publica uno nuevo
      * con la informaci??n actual. Devuelve los datos del mensaje nuevo.
      */
-    public Map<String, Object> republicar(Publicacion publicacion, List<LinkVideo> links) {
+    public Map<String, Object> republicar(Publicacion publicacion, List<LinkVideo> links, List<Resource> fotos) {
         if (publicacion.getTelegramMessageId() != null
                 && publicacion.getTelegramChatId() != null
                 && !publicacion.getTelegramChatId().isBlank()) {
@@ -161,7 +243,7 @@ public class TelegramPublisher {
                 // el mensaje ya no exist??a (borrado manual o el bot perdi?? acceso): se sigue con el nuevo
             }
         }
-        return sendPhoto(publicacion, links);
+        return enviarPost(publicacion, links, fotos, modo.canalActivo());
     }
 
     /** Elimina el mensaje del canal usando el message_id/chat_id registrados. */
@@ -366,10 +448,12 @@ public class TelegramPublisher {
         try {
             JsonNode n = jackson.readTree(texto);
             String d = n.path("description").asText(null);
-            return d != null && !d.isBlank() ? d : texto;
-        } catch (Exception e) {
-            return texto;
+            if (d != null && !d.isBlank()) return d.replaceAll("\\s+", " ").trim();
+        } catch (Exception ignore) {
+            // no es JSON: se usa el texto plano
         }
+        // Una sola línea: el cuerpo crudo de Telegram no debe ensuciar logs ni respuestas.
+        return texto.replaceAll("\\s+", " ").trim();
     }
     /** Obtiene informacion del bot (getMe). Delega a TelegramInfoService. */
     public JsonNode getMe(String token) {

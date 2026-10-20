@@ -40,6 +40,13 @@ spring:
     init:
       mode: never
 
+  # Subida de imágenes de los posts (posts personalizados). Se permite hasta 25 MB
+  # por archivo; la app lo comprime y guarda una copia propia en storage/media.
+  servlet:
+    multipart:
+      max-file-size: 25MB
+      max-request-size: 30MB
+
   datasource:
     # Valores de respaldo (los reales vienen de config-db.yaml, que tiene mayor
     # precedencia al ser importado). La base de datos NO la crea la app por su
@@ -115,6 +122,18 @@ app:
     poster-ttl-dias: 7
     # Regiones LATAM para disponibilidad en streaming (watch/providers)
     provider-regions: [AR, MX, CL, CO, PE]
+  # Imágenes de los posts: la app guarda una copia comprimida propia.
+  media:
+    # Carpeta local donde se guardan las copias procesadas (subidas + de TMDB)
+    dir: storage/media
+    # Lado máximo (px) de la imagen resultante; el resto se escala proporcional
+    max-lado: 1600
+    # Calidad JPEG (0.0 a 1.0) del re-codificado
+    calidad: 0.85
+    # Tamaño máximo permitido para un archivo subido (bytes)
+    max-bytes-subida: 26214400
+    # Tamaño de imagen de TMDB al descargar (posters/backdrops)
+    tamano-tmdb: w1280
   telegram:
     # Token del bot creado en @BotFather
     bot-token: ${TELEGRAM_BOT_TOKEN:}

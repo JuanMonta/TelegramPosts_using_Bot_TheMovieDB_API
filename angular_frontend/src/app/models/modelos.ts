@@ -24,6 +24,31 @@ export interface LinkVideo {
   orden: number;
 }
 
+/** Imagen adjunta a un post (copia propia guardada en storage/media). */
+export interface PublicacionMedia {
+  id: number;
+  publicacion_id: number;
+  orden: number;
+  archivo: string | null;
+  url: string | null;
+  origen: 'subida' | 'tmdb';
+  tmdb_tipo?: string | null;
+  tmdb_path?: string | null;
+  ancho?: number | null;
+  alto?: number | null;
+  bytes?: number | null;
+}
+
+/** Imagen de TMDB (póster/backdrop) para elegir en el editor. */
+export interface TmdbImagen {
+  file_path: string;
+  clase: 'poster' | 'backdrop';
+  ancho: number;
+  alto: number;
+  idioma: string | null;
+  votos: number;
+}
+
 export interface DatosLigeros {
   release_dates?: Record<string, unknown>;
   watch_providers?: Record<string, unknown>;
@@ -56,8 +81,11 @@ export interface SugerenciaHit {
 
 export interface Publicacion {
     id: number;
-    titulo_id: number;
+    titulo_id: number | null;
     titulo: string;
+    tipo?: 'titulo' | 'personalizado';
+    personalizado?: boolean;
+    imagenes_count?: number;
     caption: string | null;
     estado: 'borrador' | 'publicado';
     modo?: 'real' | 'test' | null;
@@ -76,17 +104,20 @@ export interface Publicacion {
 /** Fila ligera del catálogo (GET /api/publicaciones/catalogo): sin datos pesados. */
 export interface CatalogoFila {
   id: number;
+  personalizado?: boolean;
   publicacion_id: number | null;
   titulo: string;
-  tipo: 'movie' | 'tv';
+  tipo: 'movie' | 'tv' | 'personalizado';
   anio: number | null;
   generos: string | null;
   rating: number | null;
   poster_path: string | null;
+  miniatura_url?: string | null;
   estado: 'borrador' | 'publicado' | 'sin';
   fecha: string | null;
   comentarios_count: number;
   programado_para?: string | null;
+  imagenes_count?: number;
   acoplamiento_id?: number | null;
   acoplamiento?: string | null;
 }
@@ -110,7 +141,7 @@ export interface CatalogoRespuesta {
 export interface ColaItem {
   id: number;
   publicacion_id: number;
-  titulo_id: number;
+  titulo_id: number | null;
   titulo: string;
   programado_para: string | null;
   estado: 'pendiente' | 'publicando' | 'publicado' | 'fallo' | 'cancelado';

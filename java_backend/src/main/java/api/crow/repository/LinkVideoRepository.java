@@ -8,4 +8,9 @@ import java.util.List;
 public interface LinkVideoRepository extends JpaRepository<LinkVideo, Long> {
 
     List<LinkVideo> findByTituloIdOrderByOrdenAsc(Long tituloId);
+
+    /** Enlaces propios de un post personalizado. */
+    List<LinkVideo> findByPublicacionIdOrderByOrdenAsc(Long publicacionId);
+
+    List<LinkVideo> findByPublicacionId(Long publicacionId);
 }

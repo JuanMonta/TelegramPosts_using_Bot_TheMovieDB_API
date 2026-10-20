@@ -72,6 +72,7 @@ export class HomeComponent implements OnInit, OnDestroy {
   // panel "escena"
   panel: CatalogoFila | null = null;
   porTitulo: Record<number, Publicacion | undefined> = {};
+  creandoPersonalizado = false;
   // scroll de la lista (sobrevive al ir/volver del editor)
   @ViewChild('paneCuerpo') paneCuerpo!: ElementRef<HTMLElement>;
   scrollLista = 0;
@@ -253,27 +254,17 @@ export class HomeComponent implements OnInit, OnDestroy {
   cargar(): void {
     this.cargando = true;
     this.errorBackend = null;
-    this.publicacionesService.catalogo().pipe(takeUntil(this.killed)).subscribe({
-      next: (c) => {
-        this.total = c.total;
-        this.borradores = c.borradores;
-        this.publicados = c.publicados;
-        this.sin = c.sin;
-        this.catalogo = c.items;
+    this.publicacionesService.vistaCatalogo().pipe(takeUntil(this.killed)).subscribe({
+      next: ({ catalogo, porTitulo }) => {
+        this.total = catalogo.total;
+        this.borradores = catalogo.borradores;
+        this.publicados = catalogo.publicados;
+        this.sin = catalogo.sin;
+        this.catalogo = catalogo.items;
         this.reseteoPaginado();
-        this.publicacionesService.listar().pipe(takeUntil(this.killed)).subscribe({
-          next: (pubs) => {
-            const mapa: Record<number, Publicacion | undefined> = {};
-            pubs.forEach((p) => { mapa[p.titulo_id] = p; });
-            this.porTitulo = mapa;
-            this.panel = this.elegirPanel();
-            this.cargando = false;
-          },
-          error: () => {
-            this.panel = this.elegirPanel();
-            this.cargando = false;
-          }
-        });
+        this.porTitulo = porTitulo;
+        this.panel = this.elegirPanel();
+        this.cargando = false;
       },
       error: (e: HttpErrorResponse) => this.fallarCarga(e)
     });
@@ -291,30 +282,23 @@ export class HomeComponent implements OnInit, OnDestroy {
     this.refrescarDatos();
   }
   private refrescarDatos(): void {
-    this.publicacionesService.catalogo().pipe(takeUntil(this.killed)).subscribe({
-      next: (c) => {
-        this.total = c.total;
-        this.borradores = c.borradores;
-        this.publicados = c.publicados;
-        this.sin = c.sin;
-        this.catalogo = c.items;
-        this.publicacionesService.listar().pipe(takeUntil(this.killed)).subscribe({
-          next: (pubs) => {
-            const mapa: Record<number, Publicacion | undefined> = {};
-            pubs.forEach((p) => { mapa[p.titulo_id] = p; });
-            this.porTitulo = mapa;
-            // conserva el post seleccionado si sigue existiendo; si no, cae de nuevo al panel.
-            if (this.panel && !this.catalogo.some((t) => t.id === this.panel!.id)) {
-              this.panel = this.elegirPanel();
-            }
-            if (this.panelComentariosAbierto && this.panel) {
-              this.cargarComentariosDe(this.panel);
-            }
-            this.refrescarColaSilencioso();
-            setTimeout(() => this.restaurarScrollLista(), 0);
-          },
-          error: () => { /* el estado anterior sigue en pie si el refresh falla */ }
-        });
+    this.publicacionesService.vistaCatalogo().pipe(takeUntil(this.killed)).subscribe({
+      next: ({ catalogo, porTitulo }) => {
+        this.total = catalogo.total;
+        this.borradores = catalogo.borradores;
+        this.publicados = catalogo.publicados;
+        this.sin = catalogo.sin;
+        this.catalogo = catalogo.items;
+        this.porTitulo = porTitulo;
+        // conserva el post seleccionado si sigue existiendo; si no, cae de nuevo al panel.
+        if (this.panel && !this.catalogo.some((t) => t.id === this.panel!.id)) {
+          this.panel = this.elegirPanel();
+        }
+        if (this.panelComentariosAbierto && this.panel) {
+          this.cargarComentariosDe(this.panel);
+        }
+        this.refrescarColaSilencioso();
+        setTimeout(() => this.restaurarScrollLista(), 0);
       },
       error: () => { /* el estado anterior sigue en pie si el refresh falla */ }
     });
@@ -534,6 +518,11 @@ export class HomeComponent implements OnInit, OnDestroy {
    *  visual pero se conserva la preferencia. Al volver a un post publicado,
    *  si el usuario quería el panel abierto, se reabre y carga sus comentarios. */
   seleccionar(t: CatalogoFila): void {
+    // Los posts personalizados no tienen ficha de título: se abre su editor propio.
+    if (t.personalizado) {
+      this.abrir(t);
+      return;
+    }
     this.panel = t;
     if (t.estado !== 'publicado') {
       this.panelComentariosAbierto = false;
@@ -545,10 +534,31 @@ export class HomeComponent implements OnInit, OnDestroy {
       this.cargarComentariosDe(t);
     }
   }
-  /** Navega al editor del post. */
-  abrir(t: { id: number }): void {
+  /** Navega al editor del post (de título o personalizado). */
+  abrir(t: CatalogoFila): void {
     this.navegacion.vinoDeHome = true;
-    this.router.navigate(['/publicacion', t.id]);
+    if (t.personalizado) {
+      this.router.navigate(['/post', t.publicacion_id ?? t.id]);
+    } else {
+      this.router.navigate(['/publicacion', t.id]);
+    }
+  }
+
+  /** Crea un post personalizado vacío y abre su editor. */
+  crearPersonalizado(): void {
+    if (this.creandoPersonalizado) return;
+    this.creandoPersonalizado = true;
+    this.publicacionesService.crearPersonalizado('').pipe(takeUntil(this.killed)).subscribe({
+      next: (p) => {
+        this.creandoPersonalizado = false;
+        this.navegacion.vinoDeHome = true;
+        this.router.navigate(['/post', p.id]);
+      },
+      error: (e: HttpErrorResponse) => {
+        this.creandoPersonalizado = false;
+        this.snack.open(this.api.mensajeDeError(e), 'OK', { duration: 5000 });
+      }
+    });
   }
   // ---- cola de publicaciones programadas ----
   abrirCola(): void {
@@ -735,19 +745,36 @@ export class HomeComponent implements OnInit, OnDestroy {
     const [y, m, d] = this.colaDiaSel.split('-').map(Number);
     return new Date(y, m - 1, d).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' });
   }
-  /** Cuántos registros tiene el día elegido en otro apartado (para saltar sin adivinar). */
-  colaEnDia(tab: 'cola' | 'publicados' | 'fallos'): number {
-    if (!this.colaDiaSel) return 0;
-    return this.colaItems.filter((i) => {
-      const del = tab === 'cola'
-        ? i.estado === 'pendiente' || i.estado === 'publicando'
-        : tab === 'publicados'
-          ? i.estado === 'publicado'
-          : i.estado === 'fallo' || i.estado === 'cancelado';
-      if (!del) return false;
+  /** Conteos del día elegido, calculados en una sola pasada por la cola. */
+  get colaDiaConteos(): { cola: number; publicados: number; fallos: number } {
+    const conteos = { cola: 0, publicados: 0, fallos: 0 };
+    if (!this.colaDiaSel) return conteos;
+    for (const i of this.colaItems) {
       const f = this.colaFechaDe(i);
-      return f !== null && this.fechaClave(f) === this.colaDiaSel;
-    }).length;
+      if (f === null || this.fechaClave(f) !== this.colaDiaSel) continue;
+      if (i.estado === 'pendiente' || i.estado === 'publicando') conteos.cola++;
+      else if (i.estado === 'publicado') conteos.publicados++;
+      else if (i.estado === 'fallo' || i.estado === 'cancelado') conteos.fallos++;
+    }
+    return conteos;
+  }
+  /** Los conteos del día si ese día tiene registros fuera del apartado visible; si no, null. */
+  get colaDiaEnOtro(): { cola: number; publicados: number; fallos: number } | null {
+    if (!this.colaDiaSel) return null;
+    const c = this.colaDiaConteos;
+    const fuera =
+      (this.colaTab !== 'cola' && c.cola > 0) ||
+      (this.colaTab !== 'publicados' && c.publicados > 0) ||
+      (this.colaTab !== 'fallos' && c.fallos > 0);
+    return fuera ? c : null;
+  }
+  /** Línea resumen del día elegido, armada una sola vez. */
+  get resumenDiaCola(): string {
+    const { cola, publicados, fallos } = this.colaDiaConteos;
+    const pub = publicados === 1 ? 'publicado' : 'publicados';
+    const falla = fallos === 1 ? 'fallido' : 'fallidos';
+    return `${this.colaEtiquetaDia} · ${cola} en cola · ${publicados} ${pub}`
+      + (fallos ? ` · ${fallos} ${falla}` : '');
   }
   colaElegirDia(c: CalCelda): void {
     this.colaDiaSel = this.colaDiaSel === c.clave ? null : c.clave;
@@ -773,7 +800,8 @@ export class HomeComponent implements OnInit, OnDestroy {
   private cargarColaSilencioso(): void {
     if (!this.colaAbierta || this.colaAccion) return;
     this.colaService.listar().pipe(takeUntil(this.killed)).subscribe({
-      next: (items) => (this.colaItems = items.sort((a, b) => (a.programado_para ?? '').localeCompare(b.programado_para ?? '')))
+      next: (items) => (this.colaItems = items.sort((a, b) => (a.programado_para ?? '').localeCompare(b.programado_para ?? ''))),
+      error: () => undefined
     });
   }
   /** Actualiza la lista de la cola (para el badge del header) sin abrir el modal. */
@@ -1413,13 +1441,14 @@ export class HomeComponent implements OnInit, OnDestroy {
     return `${fecha} · ${hora}`;
   }
   // ---- helpers de presentación ----
-  poster(t: { poster_path: string | null }): string | null {
-    return urlPoster(t.poster_path);
+  poster(t: { poster_path: string | null; miniatura_url?: string | null }): string | null {
+    return t.miniatura_url ?? urlPoster(t.poster_path);
   }
   posterUrl(p: string | null): string | null {
     return urlPoster(p);
   }
-  tipo(t: 'movie' | 'tv'): string {
+  tipo(t: 'movie' | 'tv' | 'personalizado'): string {
+    if (t === 'personalizado') return 'Personalizado';
     return etiquetaTipo(t);
   }
   nombreTitulo(s: string): string {
