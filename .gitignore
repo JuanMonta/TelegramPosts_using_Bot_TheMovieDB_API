@@ -2,7 +2,9 @@
 # SENSIBLE
 java_backend/src/main/resources/application-local.yaml
 java_backend/config-db.yaml
-database/
+database/*
+!database/schema.sql
+!database/schema-sqlite.sql
 backups/
 
 # JAVA
@@ -31,11 +33,10 @@ angular_frontend/test-results
 storage/
 # BUILD    
 .chrome-profile/
-Build-CanalVideos.bat
-Build-CanalVideos.ps1
-generate-icons.ps1
-Launch-CanalVideos.bat
-Launch-CanalVideos.ps1
+# Herramientas portátiles descargadas por los scripts (no se versionan)
+runtime/
+tools/
+prerequisites/
 # Logs 
 **/logs/
 *.log
