@@ -22,7 +22,7 @@
   <path d="M 95 72 L 172 128 L 95 184 Z" fill="black" opacity="0.18"/>
   <!-- play -->
   <path d="M 93 70 L 170 128 L 93 186 Z" fill="white"/>
-  <!-- badge aviÃ³n (solo visible en grande) -->
+  <!-- badge avión (solo visible en grande) -->
   <circle cx="168" cy="168" r="18" fill="white"/>
   <path d="M 158 166 L 178 161 L 171 167 L 174 178 L 166 170 L 155 177 Z" fill="#0EA5E9"/>
 </svg>
