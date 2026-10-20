@@ -1,0 +1,397 @@
+<div class="post-enrejado">
+  <header class="barra">
+    <button class="ico-btn" (click)="volver()" aria-label="Volver a la lista" title="Volver">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+    </button>
+
+    <div class="avatar avatar-canal mini" aria-hidden="true">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M9.04 15.6 8.6 19.3c.12 0 .24-.04.33-.13l2.05-1.87 4.25 3.12c.78.43 1.33.21 1.54-.72l2.8-13.14c.25-1.16-.44-1.61-1.23-1.27L2.17 8.47c-1.17.45-1.16 1.11-.2 1.39l4.02 1.25 9.32-5.87c.44-.27.85-.12.52.17l-7.55 6.8-2.24 7.39z"/></svg>
+    </div>
+
+    <div class="barra-meta">
+      <div class="barra-nombre">POST PERSONALIZADO</div>
+      <div class="barra-sub tally">{{publicacion ? resumen : '…'}}</div>
+    </div>
+
+    <span *ngIf="publicacion" class="chip ml-auto" [class.chip-draft]="estado === 'borrador'" [class.chip-live]="estado === 'publicado'">
+      {{estado === 'publicado' ? 'PUBLICADO' : 'BORRADOR'}}
+    </span>
+
+    <app-tira-contexto #tira class="barra-tira" (modoCambiado)="cargar()" (crearConjunto)="irAConfiguracion()"></app-tira-contexto>
+
+    <div *ngIf="publicacion" class="borrar-holder">
+      <div *ngIf="!confirmandoEliminar && !confirmandoQuitarCanal" class="borrar-c">
+        <button class="ico-btn" (click)="confirmandoEliminar = true" aria-label="Eliminar post" title="Eliminar post">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h16"/><path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/><path d="M6.5 7l1 13a1 1 0 0 0 1 .9h7a1 1 0 0 0 1-.9l1-13"/></svg>
+        </button>
+      </div>
+      <div *ngIf="confirmandoEliminar" class="confirmar rise-in">
+        <div class="confirmar-txt">
+          <span>¿Eliminar este post personalizado?</span>
+          <span class="nota" *ngIf="estado !== 'publicado'">Se borran también sus imágenes y enlaces.</span>
+          <span class="nota" *ngIf="estado === 'publicado'">Se borran sus imágenes, enlaces y el mensaje del canal.</span>
+        </div>
+        <button class="mini-btn peligro" (click)="eliminarPost()">SÍ, ELIMINAR</button>
+        <button class="mini-btn" (click)="confirmandoEliminar = false">NO</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="zona">
+    <ng-container *ngIf="cargando">
+      <mat-progress-bar mode="indeterminate" class="barra-carga"></mat-progress-bar>
+      <div class="bollo bollo-esqueleto rise-in">
+        <div class="sk linea l1"></div>
+        <div class="sk linea l2"></div>
+        <div class="sk linea l3"></div>
+      </div>
+    </ng-container>
+
+    <div *ngIf="!cargando && errorBackend" class="pantalla-error rise-in">
+      <div class="chip chip-error">NO SE PUDO CARGAR</div>
+      <h2>{{errorBackend}}</h2>
+      <p class="dimmed">Comprueba que la aplicación esté abierta y vuelve a intentar.</p>
+      <button class="boton-accion" (click)="cargar()">REINTENTAR</button>
+    </div>
+
+    <div *ngIf="!cargando && !errorBackend && publicacion" class="post-columnas">
+      <div class="post-col-izq">
+        <!-- TEXTO -->
+        <section class="panel rise-in">
+          <div class="panel-tit">
+            <label class="tally" for="post-caption">TEXTO DEL POST</label>
+            <select class="plantilla-select" [(ngModel)]="plantillaSeleccionada" aria-label="Plantilla">
+              <option *ngFor="let p of plantillas" [ngValue]="p">{{p.name}} {{p.isDefault ? '(defecto)' : ''}}</option>
+            </select>
+            <button class="mini-btn accente" (click)="usarPlantilla()" [disabled]="!plantillaSeleccionada" title="Usar esta plantilla como texto">USAR</button>
+            <button class="mini-ico" (click)="abrirGestionPlantillas()" title="Gestionar plantillas" aria-label="Gestionar plantillas">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6v6H9z"/></svg>
+            </button>
+            <span class="tally estado-guardado" [class.guardadito]="estadoGuardado === 'guardado'">
+              <ng-container *ngIf="estadoGuardado === 'salvando'">guardando…</ng-container>
+              <ng-container *ngIf="estadoGuardado === 'guardado'">guardado</ng-container>
+              <ng-container *ngIf="estadoGuardado === 'idle'">lo que escribas se guarda solo</ng-container>
+            </span>
+          </div>
+
+          <textarea
+            id="post-caption"
+            class="caption caret-blue"
+            rows="6"
+            [(ngModel)]="caption"
+            (ngModelChange)="onCaptionInput()"
+            placeholder="Escribe el texto del post (aviso, comunicado, noticia…)."
+          ></textarea>
+
+          <div class="contador-capsula" [class.excede]="contadorCaption.excede" [class.cerca]="contadorCaption.cerca">
+            <span class="contador-num" [class.peligro]="contadorCaption.excede">{{contadorCaption.total}} / {{contadorCaption.limite}}</span>
+            <span class="contador-detalle">texto: {{contadorCaption.caption}} · enlaces: {{contadorCaption.links}}</span>
+            <span class="contador-restante" *ngIf="!contadorCaption.excede">{{contadorCaption.restante}} restantes</span>
+            <span class="contador-alerta" *ngIf="contadorCaption.cerca && !contadorCaption.excede">Te acercas al límite.</span>
+            <span class="contador-alerta" *ngIf="contadorCaption.excede">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              Supera por {{-contadorCaption.restante}}. <ng-container *ngIf="imagenes.length">Quita imágenes para usar el límite de 4096.</ng-container>
+            </span>
+          </div>
+          <div class="limite-ayuda tally">
+            <ng-container *ngIf="imagenes.length">Con imágenes, Telegram admite hasta {{LIMITE_FOTO}} caracteres (texto + enlaces).</ng-container>
+            <ng-container *ngIf="!imagenes.length">Sin imágenes, Telegram admite hasta {{LIMITE_TEXTO}} caracteres (texto + enlaces).</ng-container>
+          </div>
+        </section>
+
+        <!-- IMÁGENES -->
+        <section class="panel rise-in">
+          <div class="panel-tit">
+            <label class="tally">IMÁGENES</label>
+            <span class="chip tally">{{imagenes.length}} / 10</span>
+            <span class="tally dimmed" *ngIf="subiendo">Subiendo {{subiendo}}…</span>
+            <div class="ml-auto acciones-media">
+              <button class="mini-btn" (click)="fileInput.click()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+                SUBIR DE LA PC
+              </button>
+              <button class="mini-btn accente" (click)="abrirTmdb()" [disabled]="tmdbAbierto">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg>
+                BUSCAR EN TMDB
+              </button>
+            </div>
+          </div>
+          <input #fileInput type="file" accept="image/*" multiple class="oculto" (change)="subirArchivos($event)" aria-hidden="true" />
+
+          <div class="media-vacio dimmed" *ngIf="!imagenes.length && !subiendo">
+            Aún no hay imágenes. Con 0 imágenes el post se envía como texto (hasta 4096 caracteres); con imágenes, como foto o álbum (hasta 1024).
+          </div>
+
+          <div class="media-grid" *ngIf="imagenes.length">
+            <div class="media-item rise-in" *ngFor="let m of imagenes; let i = index">
+              <div class="media-mini" [style.backgroundImage]="m.url ? 'url(' + m.url + ')' : ''">
+                <span class="media-badge" [class.badge-tmdb]="m.origen === 'tmdb'">{{m.origen === 'tmdb' ? 'TMDB' : 'PC'}}</span>
+              </div>
+              <div class="media-controles">
+                <button class="mini-ico" (click)="moverImagen(m, -1)" [disabled]="i === 0" aria-label="Mover antes" title="Mover antes">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                </button>
+                <span class="media-orden tally">{{i + 1}}</span>
+                <button class="mini-ico" (click)="moverImagen(m, 1)" [disabled]="i === imagenes.length - 1" aria-label="Mover después" title="Mover después">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                </button>
+                <button class="mini-ico x" (click)="quitarImagen(m)" aria-label="Quitar imagen" title="Quitar imagen">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- SELECTOR TMDB -->
+        <section class="panel rise-in" *ngIf="tmdbAbierto">
+          <div class="panel-tit">
+            <label class="tally">IMÁGENES DE TMDB</label>
+            <button class="mini-ico" (click)="cerrarTmdb()" aria-label="Cerrar" title="Cerrar">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
+            </button>
+          </div>
+          <div class="tmdb-buscar">
+            <input class="campo caret-blue" [(ngModel)]="tmdbQuery" placeholder="Buscar película o serie en TMDB…" (keyup.enter)="buscarTmdb()" aria-label="Buscar en TMDB" />
+            <button class="mini-btn accente" (click)="buscarTmdb()" [disabled]="tmdbBuscando || !tmdbQuery.trim()">{{tmdbBuscando ? '…' : 'BUSCAR'}}</button>
+          </div>
+
+          <div class="tmdb-resultados" *ngIf="!tmdbTituloSel && tmdbResultados.length">
+            <button class="tmdb-titulo" *ngFor="let h of tmdbResultados" (click)="elegirTmdb(h)">
+              <span class="tmdb-poster" [style.backgroundImage]="h.poster_path ? 'url(' + urlTmdb(h.poster_path) + ')' : ''"></span>
+              <span class="tmdb-titulo-txt">
+                <span class="tmdb-nombre">{{h.titulo}}</span>
+                <span class="tally dimmed">{{h.media_type === 'tv' ? 'Serie' : 'Película'}}<ng-container *ngIf="h.anio"> · {{h.anio}}</ng-container></span>
+              </span>
+            </button>
+            <div class="dimmed" *ngIf="!tmdbResultados.length">Sin resultados.</div>
+          </div>
+
+          <div *ngIf="tmdbTituloSel">
+            <div class="tmdb-sel-tit tally">Imágenes de <strong>{{tmdbTituloSel.titulo}}</strong></div>
+            <div class="tmdb-cargando dimmed" *ngIf="tmdbCargandoImagenes">Cargando imágenes…</div>
+            <div class="tmdb-imagenes" *ngIf="!tmdbCargandoImagenes">
+              <button class="tmdb-img" *ngFor="let img of tmdbImagenes" (click)="adjuntarTmdb(img)" [disabled]="tmdbAdjuntando > 0" [attr.aria-label]="'Adjuntar ' + img.clase">
+                <span class="tmdb-img-bg" [style.backgroundImage]="'url(' + urlTmdb(img.file_path) + ')'"></span>
+                <span class="tmdb-img-clase tally">{{img.clase === 'poster' ? 'Póster' : 'Fondo'}}</span>
+              </button>
+              <div class="dimmed" *ngIf="!tmdbImagenes.length">Este título no tiene imágenes disponibles.</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ENLACES -->
+        <section class="panel rise-in">
+          <div class="panel-tit">
+            <label class="tally">ENLACES DEL POST</label>
+            <span class="chip tally">{{links.length}}<ng-container *ngIf="links.length !== 1"> enlaces</ng-container><ng-container *ngIf="links.length === 1"> enlace</ng-container></span>
+          </div>
+
+          <div class="filas-botones" *ngIf="links.length">
+            <div class="fila-boton rise-in" *ngFor="let f of links; let i = index">
+              <div class="mover">
+                <button class="mini-ico" (click)="moverLink(f, -1)" [disabled]="i === 0" aria-label="Subir" title="Subir">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
+                </button>
+                <button class="mini-ico" (click)="moverLink(f, 1)" [disabled]="i === links.length - 1" aria-label="Bajar" title="Bajar">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                </button>
+              </div>
+              <input class="campo field-texto caret-blue" [(ngModel)]="f.texto" [attr.aria-label]="'Texto del botón ' + (i + 1)" placeholder="Texto del botón" (blur)="guardarLink(f)" (keyup.enter)="guardarLink(f)" />
+              <input class="campo field-url caret-blue" [(ngModel)]="f.url" [attr.aria-label]="'URL del botón ' + (i + 1)" placeholder="https://t.me/…" (blur)="guardarLink(f)" (keyup.enter)="guardarLink(f)" />
+              <button class="mini-ico x" (click)="eliminarLink(f)" aria-label="Eliminar botón" title="Eliminar botón">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="fila-boton fila-nueva">
+            <input class="campo field-texto caret-blue" [(ngModel)]="nuevoTexto" aria-label="Texto del botón nuevo" placeholder="Texto nuevo (p. ej. Ver más)" (keyup.enter)="guardarNuevoLink()" />
+            <input class="campo field-url caret-blue" [(ngModel)]="nuevaUrl" aria-label="URL del botón nuevo" placeholder="https://t.me/…" (keyup.enter)="guardarNuevoLink()" />
+            <button class="mini-btn accente" (click)="guardarNuevoLink()" [disabled]="!nuevoTexto.trim() || !nuevaUrl.trim()">AÑADIR</button>
+          </div>
+        </section>
+      </div>
+
+      <!-- ACCIONES -->
+      <aside class="post-col-der">
+        <!-- vista previa: el mensaje tal cual se verá en Telegram -->
+        <section class="panel rise-in">
+          <div class="panel-tit">
+            <label class="tally">VISTA PREVIA</label>
+            <span class="tally dimmed">así se verá en Telegram</span>
+          </div>
+
+          <div class="bollo">
+            <div class="bollo-album" *ngIf="imagenes.length" [ngClass]="albumClase">
+              <div class="album-img" *ngFor="let m of albumPreview; let i = index" [style.backgroundImage]="m.url ? 'url(' + m.url + ')' : ''">
+                <span class="album-mas" *ngIf="albumRestantes && i === albumPreview.length - 1">+{{albumRestantes}}</span>
+              </div>
+            </div>
+            <div class="bollo-caption" [class.vacio-caption]="!caption">{{caption || 'El texto aparecerá aquí…'}}</div>
+            <div class="bollo-links" *ngIf="links.length">
+              <div class="bollo-link" *ngFor="let f of links">📥 {{f.texto || 'Enlace'}} — {{f.url}}</div>
+            </div>
+            <div class="bollo-pie" *ngIf="estado === 'publicado'">
+              <span class="checks">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 12 9 17 20 6"/><polyline points="12 12 16 16 20 12"/></svg>
+              </span>
+              <div class="pie-lista">
+                <span class="tally" *ngIf="publicacion?.fecha_publicacion">publicado · {{fmtFechaHora(publicacion?.fecha_publicacion)}}</span>
+                <span class="tally pie-tier" *ngIf="publicacion?.fecha_editado">editado · {{fmtFechaHora(publicacion?.fecha_editado)}}</span>
+                <span class="tally pie-tier" *ngIf="publicacion?.fecha_republicado">republicado · {{fmtFechaHora(publicacion?.fecha_republicado)}}</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel rise-in">
+          <div class="panel-tit">
+            <label class="tally">PUBLICAR</label>
+          </div>
+
+          <button class="boton-accion grande" (click)="publicar()" [disabled]="publicando || editando || contadorCaption.excede">
+            {{publicando ? 'PUBLICANDO…' : (estado === 'publicado' ? 'PUBLICAR DE NUEVO' : 'PUBLICAR EN EL CANAL')}}
+          </button>
+
+          <button class="boton-accion" *ngIf="estado === 'publicado'" (click)="actualizarEnCanal()" [disabled]="editando || publicando">
+            {{editando ? '…' : 'ACTUALIZAR EN EL CANAL'}}
+          </button>
+
+          <button class="boton-accion" *ngIf="estado === 'publicado' && !confirmandoRepost" (click)="confirmandoRepost = true" [disabled]="editando || publicando">
+            VOLVER A PUBLICAR (NUEVO MENSAJE)
+          </button>
+          <div *ngIf="confirmandoRepost" class="confirmar rise-in">
+            <div class="confirmar-txt">
+              <span>¿Eliminar el post del canal y publicarlo de nuevo con los cambios?</span>
+            </div>
+            <button class="mini-btn peligro" (click)="repostear()" [disabled]="editando">SÍ, VOLVER A PUBLICAR</button>
+            <button class="mini-btn" (click)="confirmandoRepost = false">NO</button>
+          </div>
+
+          <button class="boton-accion peligro" *ngIf="estado === 'publicado' && !confirmandoQuitarCanal && !confirmandoEliminar" (click)="confirmandoQuitarCanal = true" [disabled]="editando || publicando">
+            QUITAR DEL CANAL
+          </button>
+          <div *ngIf="confirmandoQuitarCanal && publicacion" class="confirmar rise-in">
+            <div class="confirmar-txt">
+              <span>¿Eliminar el mensaje del canal?</span>
+              <span class="nota">El post vuelve a borrador; puedes editarlo y publicarlo otra vez.</span>
+            </div>
+            <button class="mini-btn peligro" (click)="eliminarDelCanal()" [disabled]="editando">SÍ, QUITAR</button>
+            <button class="mini-btn" (click)="confirmandoQuitarCanal = false">NO</button>
+          </div>
+
+          <button class="boton-accion" *ngIf="linkComentario" (click)="abrirComentario()">VER EN EL CANAL</button>
+        </section>
+
+        <section class="panel rise-in">
+          <div class="panel-tit">
+            <label class="tally">PROGRAMAR</label>
+          </div>
+
+          <div *ngIf="colaActiva" class="cola-activa">
+            <div class="chip chip-programado tally">PROGRAMADO</div>
+            <div class="dimmed">{{fmtFechaHora(colaActiva.programado_para)}}</div>
+            <div class="tally dimmed" *ngIf="colaActiva.estado">{{colaActiva.estado}}</div>
+            <button class="boton-accion" (click)="cancelarProgramacionActiva()" [disabled]="accionCola">CANCELAR PROGRAMACIÓN</button>
+          </div>
+
+          <ng-container *ngIf="!colaActiva">
+            <button class="boton-accion" *ngIf="!programando" (click)="abrirProgramacion()">PROGRAMAR PUBLICACIÓN</button>
+
+            <div *ngIf="programando" class="programar-caja">
+              <div class="atajos">
+                <button class="mini-btn" (click)="setProgramar(1)">+1 h</button>
+                <button class="mini-btn" (click)="setProgramar(3)">+3 h</button>
+                <button class="mini-btn" (click)="setProgramar(24)">Mañana</button>
+                <button class="mini-btn" (click)="setProgramar(168)">+1 semana</button>
+              </div>
+              <input id="post-programar-fecha" type="datetime-local" class="campo programar-input caret-blue" [(ngModel)]="programarPara" aria-label="Fecha y hora" />
+              <div class="acciones-programar">
+                <button class="mini-btn accente" (click)="confirmarProgramar()" [disabled]="accionCola || !programarPara">PROGRAMAR</button>
+                <button class="mini-btn" (click)="cancelarProgramacion()">CANCELAR</button>
+              </div>
+            </div>
+          </ng-container>
+        </section>
+      </aside>
+    </div>
+  </div>
+
+  <!-- diálogo de gestión de plantillas -->
+  <div class="modal-fondo" *ngIf="configurandoPlantillas">
+    <div class="modal-carta modal-ancha">
+      <div class="modal-cab">
+        <span class="tally">PLANTILLAS DE TEXTO</span>
+        <span class="tally dimmed">Gestiona las plantillas y elige la que usarás por defecto.</span>
+      </div>
+
+      <div class="plantillas-lista" *ngIf="!plantillaEditando">
+        <div class="plantilla-fila" *ngFor="let p of plantillas" [class.default]="p.isDefault">
+          <div class="plantilla-info">
+            <span class="plantilla-nombre">{{p.name}} <span class="chip chip-default" *ngIf="p.isDefault">POR DEFECTO</span></span>
+            <span class="plantilla-preview">{{p.template.substring(0, 80)}}…</span>
+          </div>
+          <div class="plantilla-acciones">
+            <button class="mini-ico" (click)="seleccionarPlantilla(p)" title="Usar esta plantilla">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+            </button>
+            <button class="mini-ico" (click)="marcarComoDefault(p)" title="Marcar como defecto" [disabled]="p.isDefault">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+            </button>
+            <button class="mini-ico" (click)="editarPlantilla(p)" title="Editar">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            </button>
+            <button class="mini-ico peligro" (click)="borrarPlantilla(p)" title="Borrar" [disabled]="p.isDefault">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="plantilla-nueva">
+          <input class="campo" [(ngModel)]="nuevaPlantillaNombre" placeholder="Nombre de la plantilla" (keyup.enter)="crearPlantilla()" />
+          <textarea class="campo plantilla-nueva-text" [(ngModel)]="nuevaPlantillaTexto" (input)="actualizarValidacionNueva($event)" placeholder="Plantilla. Para posts personalizados puedes escribir texto libre; las marcas {title}, {year}… solo se rellenan en posts de películas." rows="4" spellcheck="false"></textarea>
+          <div class="placeholders">
+            <span class="tally">Datos disponibles:</span>
+            <span class="chip mono" *ngFor="let p of ['title','year','rating','votes','genres','synopsis','providers']" (click)="insertarPlaceholder('nueva', p)" title="Haz clic para insertarlo en el texto">{{placeholder(p)}}</span>
+          </div>
+          <div class="placeholder-validacion" *ngIf="validacionNueva.invalid.length > 0 || validacionNueva.valid.length > 0">
+            <span class="tally">Comprobación:</span>
+            <span class="chip chip-ok" *ngFor="let v of validacionNueva.valid">{{v}}</span>
+            <span class="chip chip-bad" *ngFor="let v of validacionNueva.invalid">{{v}} <span class="tally">(no válida)</span></span>
+          </div>
+          <button class="mini-btn accente" (click)="crearPlantilla()" [disabled]="!nuevaPlantillaNombre.trim() || !nuevaPlantillaTexto.trim() || guardandoPlantilla">
+            <span *ngIf="!guardandoPlantilla">CREAR PLANTILLA</span>
+            <span class="spinner spinner-chico" *ngIf="guardandoPlantilla"></span>
+          </button>
+        </div>
+      </div>
+
+      <div class="plantilla-editar" *ngIf="plantillaEditando">
+        <input class="campo" [(ngModel)]="plantillaEditando.name" placeholder="Nombre" />
+        <textarea class="campo plantilla-editor" [(ngModel)]="plantillaEditando.template" (input)="actualizarValidacionEditar($event)" rows="12" spellcheck="false"></textarea>
+        <div class="placeholders">
+          <span class="tally">Datos disponibles:</span>
+          <span class="chip mono" *ngFor="let p of ['title','year','rating','votes','genres','synopsis','providers']" (click)="insertarPlaceholderEnEdicion(p)" title="Haz clic para insertarlo en el texto">{{placeholder(p)}}</span>
+        </div>
+        <div class="placeholder-validacion" *ngIf="validacionEditar.invalid.length > 0 || validacionEditar.valid.length > 0">
+          <span class="tally">Comprobación:</span>
+          <span class="chip chip-ok" *ngFor="let v of validacionEditar.valid">{{v}}</span>
+          <span class="chip chip-bad" *ngFor="let v of validacionEditar.invalid">{{v}} <span class="tally">(no válida)</span></span>
+        </div>
+        <label class="tally"><input type="checkbox" [(ngModel)]="plantillaEditando.isDefault" /> Por defecto</label>
+        <div class="modal-pie">
+          <button class="mini-btn" (click)="cancelarEdicion()">CANCELAR</button>
+          <button class="mini-btn accente" (click)="guardarEdicionPlantilla()" [disabled]="guardandoPlantilla">
+            <span *ngIf="!guardandoPlantilla">GUARDAR</span>
+            <span class="spinner spinner-chico" *ngIf="guardandoPlantilla"></span>
+          </button>
+        </div>
+      </div>
+
+      <div class="modal-pie">
+        <button class="mini-btn" (click)="cerrarGestionPlantillas()">CERRAR</button>
+      </div>
+    </div>
+  </div>
+</div>

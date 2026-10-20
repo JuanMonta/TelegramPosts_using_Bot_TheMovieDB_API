@@ -18,6 +18,11 @@ export class ApiService {
     return this.http.post<T>(`${this.baseUrl}${path}`, body ?? null).pipe(catchError((e) => this.fallar(e)));
   }
 
+  /** Envía un FormData (subida de archivos). Angular fija el multipart solo. */
+  postForm<T>(path: string, form: FormData): Observable<T> {
+    return this.http.post<T>(`${this.baseUrl}${path}`, form).pipe(catchError((e) => this.fallar(e)));
+  }
+
   put<T>(path: string, body?: unknown): Observable<T> {
     return this.http.put<T>(`${this.baseUrl}${path}`, body ?? null).pipe(catchError((e) => this.fallar(e)));
   }

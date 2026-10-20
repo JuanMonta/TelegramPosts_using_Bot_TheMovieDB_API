@@ -117,17 +117,23 @@
       <!-- catálogo de títulos guardados -->
       <ng-container *ngIf="!buscado">
         <div class="cat-bar rise-in">
-          <div class="pestanas" role="tablist">
-            <button class="pestana" [class.activa]="filtroEstado === 'todos'" (click)="cambiarEstado('todos')" role="tab">
-              Todos <span class="cnt">{{total}}</span>
+          <div class="pestanas">
+            <button class="pestana pestana-nueva" (click)="crearPersonalizado()" [disabled]="creandoPersonalizado" title="Crear un aviso o comunicado (sin TMDB)" aria-label="Nuevo post personalizado">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              {{creandoPersonalizado ? 'CREANDO…' : 'NUEVO POST'}}
             </button>
-            <button class="pestana" [class.activa]="filtroEstado === 'borrador'" (click)="cambiarEstado('borrador')" role="tab">
-              <span class="punto-mini" aria-hidden="true"></span> Borradores <span class="cnt">{{borradores}}</span>
-            </button>
-            <button class="pestana" [class.activa]="filtroEstado === 'publicado'" (click)="cambiarEstado('publicado')" role="tab">
-              <svg class="checks-mini" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="4 12 9 17 20 6"/><polyline points="12 12 16 16 20 12"/></svg>
-              Publicados <span class="cnt">{{publicados}}</span>
-            </button>
+            <div class="tabs" role="tablist">
+              <button class="pestana" [class.activa]="filtroEstado === 'todos'" (click)="cambiarEstado('todos')" role="tab">
+                Todos <span class="cnt">{{total}}</span>
+              </button>
+              <button class="pestana" [class.activa]="filtroEstado === 'borrador'" (click)="cambiarEstado('borrador')" role="tab">
+                <span class="punto-mini" aria-hidden="true"></span> Borradores <span class="cnt">{{borradores}}</span>
+              </button>
+              <button class="pestana" [class.activa]="filtroEstado === 'publicado'" (click)="cambiarEstado('publicado')" role="tab">
+                <svg class="checks-mini" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="4 12 9 17 20 6"/><polyline points="12 12 16 16 20 12"/></svg>
+                Publicados <span class="cnt">{{publicados}}</span>
+              </button>
+            </div>
           </div>
 
           <div class="cat-busqueda">
@@ -475,7 +481,7 @@
           <span class="cal-dot-marca"></span> elegido
         </div>
         <div *ngIf="colaDiaSel" class="cal-filtro-info">
-          <span class="tally">{{colaEtiquetaDia}} · {{colaEnDia('cola')}} en cola · {{colaEnDia('publicados')}} publicado<ng-container *ngIf="colaEnDia('publicados') !== 1">s</ng-container><ng-container *ngIf="colaEnDia('fallos')"> · {{colaEnDia('fallos')}} fallido<ng-container *ngIf="colaEnDia('fallos') !== 1">s</ng-container></ng-container></span>
+          <span class="tally">{{resumenDiaCola}}</span>
           <button class="enlace" (click)="colaLimpiarDia()">QUITAR DÍA</button>
         </div>
         <p *ngIf="!colaDiaSel" class="cfg-ayuda">Toca un día para filtrar la lista y usarlo al programar. Toca fuera para cerrar.</p>
@@ -494,11 +500,11 @@
       <span class="tally dimmed" *ngIf="colaTab === 'cola'">Sin publicaciones programadas{{colaDiaSel ? ' para este día' : ''}}. Elige un borrador y una hora arriba.</span>
       <span class="tally dimmed" *ngIf="colaTab === 'publicados'">Aún no hay publicaciones{{colaDiaSel ? ' para este día' : ''}}.</span>
       <span class="tally dimmed" *ngIf="colaTab === 'fallos'">Sin fallos ni cancelados{{colaDiaSel ? ' para este día' : ''}}. Todo limpio.</span>
-      <div class="cola-saltar" *ngIf="colaDiaSel && ((colaTab !== 'cola' && colaEnDia('cola')) || (colaTab !== 'publicados' && colaEnDia('publicados')) || (colaTab !== 'fallos' && colaEnDia('fallos')))">
+      <div class="cola-saltar" *ngIf="colaDiaEnOtro as d">
         <span class="tally">Ese día está en:</span>
-        <button class="enlace" *ngIf="colaTab !== 'cola' && colaEnDia('cola')" (click)="elegirColaTab('cola')">En cola ({{colaEnDia('cola')}})</button>
-        <button class="enlace" *ngIf="colaTab !== 'publicados' && colaEnDia('publicados')" (click)="elegirColaTab('publicados')">Publicados ({{colaEnDia('publicados')}})</button>
-        <button class="enlace" *ngIf="colaTab !== 'fallos' && colaEnDia('fallos')" (click)="elegirColaTab('fallos')">Fallos ({{colaEnDia('fallos')}})</button>
+        <button class="enlace" *ngIf="colaTab !== 'cola' && d.cola" (click)="elegirColaTab('cola')">En cola ({{d.cola}})</button>
+        <button class="enlace" *ngIf="colaTab !== 'publicados' && d.publicados" (click)="elegirColaTab('publicados')">Publicados ({{d.publicados}})</button>
+        <button class="enlace" *ngIf="colaTab !== 'fallos' && d.fallos" (click)="elegirColaTab('fallos')">Fallos ({{d.fallos}})</button>
       </div>
     </div>
 

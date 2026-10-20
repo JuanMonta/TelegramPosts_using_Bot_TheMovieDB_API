@@ -6,9 +6,11 @@ import api.crow.service.TmdbService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.client.RestClientException;
 import tools.jackson.databind.JsonNode;
 
 import java.util.LinkedHashMap;
@@ -58,8 +60,9 @@ public class TmdbController {
                 return ResponseEntity.ok(tmdb.buscarPorId(String.valueOf(id)));
             }
             return ResponseEntity.ok(tmdb.search(q));
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(Map.of("error", "TMDB: " + e.getMessage()));
+        } catch (RestClientException e) {
+            return ResponseEntity.badRequest().body(Map.of("error",
+                    "No se pudo consultar TMDB. Intentá de nuevo en unos minutos."));
         }
     }
 
@@ -84,6 +87,19 @@ public class TmdbController {
      * El frontend llama aquí cuando el usuario elige una película/serie de la
      * lista de 'search'.
      */
+    /**
+     * Pósters y backdrops de una película/serie (para elegir imágenes en el editor).
+     */
+    @GetMapping("/{tipo}/{id}/imagenes")
+    public ResponseEntity<?> imagenes(@PathVariable("tipo") String tipo, @PathVariable("id") int id) {
+        try {
+            return ResponseEntity.ok(tmdb.imagenes(tipo, id));
+        } catch (RestClientException e) {
+            return ResponseEntity.badRequest().body(Map.of("error",
+                    "No se pudieron cargar las imágenes de TMDB. Intentá de nuevo en unos minutos."));
+        }
+    }
+
     @GetMapping("/guardar")
     public ResponseEntity<?> guardar(@RequestParam("tipo") String tipo,
                                      @RequestParam("tmdbId") int tmdbId) {
@@ -93,8 +109,9 @@ public class TmdbController {
         try {
             Titulo t = tmdb.fetchOrSave(tipo, tmdbId);
             return ResponseEntity.ok(toMap(t));
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (RestClientException e) {
+            return ResponseEntity.badRequest().body(Map.of("error",
+                    "No se pudo guardar el título desde TMDB. Intentá de nuevo en unos minutos."));
         }
     }
 

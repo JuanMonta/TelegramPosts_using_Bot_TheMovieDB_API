@@ -70,6 +70,45 @@ public class TmdbService {
     }
 
     /**
+     * Imágenes (pósters y backdrops) de una película/serie para elegir en el
+     * editor de posts. Se ordenan por votación descendente y se limita el total.
+     */
+    public List<Map<String, Object>> imagenes(String tipo, int tmdbId) {
+        if (!tipo.equals("movie") && !tipo.equals("tv")) {
+            throw new IllegalArgumentException("tipo debe ser movie|tv");
+        }
+        checkKey();
+        JsonNode body = restClient.get()
+                .uri(uri -> uri.path("/" + tipo + "/" + tmdbId + "/images")
+                        .queryParam("include_image_language", "es,en,null")
+                        .build())
+                .header("Authorization", "Bearer " + configService.tmdbToken())
+                .retrieve()
+                .body(JsonNode.class);
+
+        List<Map<String, Object>> out = new ArrayList<>();
+        agregarImagenes(out, body.path("posters"), "poster");
+        agregarImagenes(out, body.path("backdrops"), "backdrop");
+        out.sort((a, b) -> Double.compare((double) b.get("votos"), (double) a.get("votos")));
+        return out.size() > 40 ? out.subList(0, 40) : out;
+    }
+
+    private void agregarImagenes(List<Map<String, Object>> out, JsonNode arr, String clase) {
+        for (JsonNode n : arr) {
+            String path = n.path("file_path").asText(null);
+            if (path == null || path.isBlank()) continue;
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("file_path", path);
+            m.put("clase", clase);
+            m.put("ancho", n.path("width").asInt());
+            m.put("alto", n.path("height").asInt());
+            m.put("idioma", n.path("iso_639_1").asText(null));
+            m.put("votos", n.path("vote_average").asDouble());
+            out.add(m);
+        }
+    }
+
+    /**
      * Búsqueda por id: resuelve el código oficial de TMDB (intenta movie, luego tv)
      * y devuelve un hit con la misma forma que search(), o lista vacía si no existe.
      */
