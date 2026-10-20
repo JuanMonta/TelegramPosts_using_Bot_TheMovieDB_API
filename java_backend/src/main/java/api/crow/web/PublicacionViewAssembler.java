@@ -7,6 +7,7 @@ import api.crow.domain.PublicacionMedia;
 import api.crow.repository.AcoplamientoRepository;
 import api.crow.repository.ColaPublicacionRepository;
 import api.crow.repository.ComentarioRepository;
+import api.crow.repository.ConteoPublicacion;
 import api.crow.repository.LinkVideoRepository;
 import api.crow.repository.PublicacionMediaRepository;
 import api.crow.repository.PublicacionRepository;
@@ -54,12 +55,12 @@ public class PublicacionViewAssembler {
             if (visibleEnModo(p, modoActivo)) visibles.add(p);
         }
         List<Long> ids = visibles.stream().map(Publicacion::getId).toList();
-        Map<Long, Long> conteoComentarios = ids.isEmpty()
-                ? Map.of()
-                : comentarioRepository.conteoPorPublicaciones(ids);
-        Map<Long, Long> conteoImagenes = ids.isEmpty()
-                ? Map.of()
-                : mediaRepository.conteoPorPublicaciones(ids);
+            Map<Long, Long> conteoComentarios = ids.isEmpty()
+                    ? Map.of()
+                    : aMapa(comentarioRepository.conteoPorPublicaciones(ids));
+            Map<Long, Long> conteoImagenes = ids.isEmpty()
+                    ? Map.of()
+                    : aMapa(mediaRepository.conteoPorPublicaciones(ids));
         List<Map<String, Object>> out = new ArrayList<>();
         for (Publicacion p : visibles) {
             out.add(toMap(p,
@@ -85,10 +86,10 @@ public class PublicacionViewAssembler {
                 .toList();
         Map<Long, Long> conteoComentarios = pubIds.isEmpty()
                 ? Map.of()
-                : comentarioRepository.conteoPorPublicaciones(pubIds);
+                : aMapa(comentarioRepository.conteoPorPublicaciones(pubIds));
         Map<Long, Long> conteoImagenes = pubIds.isEmpty()
                 ? Map.of()
-                : mediaRepository.conteoPorPublicaciones(pubIds);
+                : aMapa(mediaRepository.conteoPorPublicaciones(pubIds));
 
         Map<Long, String> programado = new HashMap<>();
         for (ColaPublicacion c : colaRepository.findAtivosConPublicacion()) {
@@ -149,7 +150,7 @@ public class PublicacionViewAssembler {
         List<Long> persIds = personalizados.stream().map(Publicacion::getId).toList();
         Map<Long, Long> conteoComentariosPersonalizados = persIds.isEmpty()
                 ? Map.of()
-                : comentarioRepository.conteoPorPublicaciones(persIds);
+                : aMapa(comentarioRepository.conteoPorPublicaciones(persIds));
         for (Publicacion p : personalizados) {
             if ("publicado".equals(p.getEstado())) publicados++;
             else borradores++;
@@ -266,6 +267,14 @@ public class PublicacionViewAssembler {
             }
         }
         return "Post personalizado";
+    }
+
+    private static Map<Long, Long> aMapa(List<ConteoPublicacion> filas) {
+        Map<Long, Long> out = new HashMap<>(Math.max(4, filas.size()));
+        for (ConteoPublicacion f : filas) {
+            if (f.getPubId() != null) out.put(f.getPubId(), f.getCnt() == null ? 0L : f.getCnt());
+        }
+        return out;
     }
 
     public Map<String, Object> toMap(Publicacion p) {

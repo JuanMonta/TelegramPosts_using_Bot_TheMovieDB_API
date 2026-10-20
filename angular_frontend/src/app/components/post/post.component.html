@@ -100,13 +100,23 @@
         </section>
 
         <!-- IMÁGENES -->
-        <section class="panel rise-in">
+        <section class="panel rise-in zona-media"
+                 [class.recibiendo]="arrastrandoArchivos"
+                 (dragenter)="alEntrarArchivos($event)"
+                 (dragover)="alPasarArchivos($event)"
+                 (dragleave)="alSalirArchivos($event)"
+                 (drop)="alSoltarArchivos($event)">
+          <div class="media-drop" *ngIf="arrastrandoArchivos" aria-hidden="true">
+            <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            <strong>Suelta los archivos para adjuntarlos</strong>
+            <span>Se agregarán al final del álbum (máximo 10 imágenes).</span>
+          </div>
           <div class="panel-tit">
             <label class="tally">IMÁGENES</label>
             <span class="chip tally">{{imagenes.length}} / 10</span>
             <span class="tally dimmed" *ngIf="subiendo">Subiendo {{subiendo}}…</span>
             <div class="ml-auto acciones-media">
-              <button class="mini-btn" (click)="fileInput.click()">
+              <button class="mini-btn" (click)="fileInput.click()" title="También puedes pegar una imagen con Ctrl+V">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
                 SUBIR DE LA PC
               </button>
@@ -119,11 +129,22 @@
           <input #fileInput type="file" accept="image/*" multiple class="oculto" (change)="subirArchivos($event)" aria-hidden="true" />
 
           <div class="media-vacio dimmed" *ngIf="!imagenes.length && !subiendo">
-            Aún no hay imágenes. Con 0 imágenes el post se envía como texto (hasta 4096 caracteres); con imágenes, como foto o álbum (hasta 1024).
+            Aún no hay imágenes. Sin imágenes, el post se envía como texto (hasta 4096 caracteres).
           </div>
 
           <div class="media-grid" *ngIf="imagenes.length">
-            <div class="media-item rise-in" *ngFor="let m of imagenes; let i = index">
+            <div class="media-item"
+                 *ngFor="let m of imagenes; let i = index; trackBy: trackByImagen"
+                 draggable="true"
+                 [class.arrastrando]="arrastrando === i"
+                 [class.drop-antes]="dropDestino === i && arrastrando !== null && arrastrando > i"
+                 [class.drop-despues]="dropDestino === i && arrastrando !== null && arrastrando < i"
+                 (dragstart)="onDragStart(i, $event)"
+                 (dragover)="onDragOver(i, $event)"
+                 (dragleave)="onDragLeave(i, $event)"
+                 (drop)="onDrop(i, $event)"
+                 (dragend)="onDragEnd()"
+                 title="Arrastra para cambiar el orden">
               <div class="media-mini" [style.backgroundImage]="m.url ? 'url(' + m.url + ')' : ''">
                 <span class="media-badge" [class.badge-tmdb]="m.origen === 'tmdb'">{{m.origen === 'tmdb' ? 'TMDB' : 'PC'}}</span>
               </div>
@@ -139,6 +160,27 @@
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
                 </button>
               </div>
+            </div>
+          </div>
+          <div class="zona-pegado"
+               [class.activa]="sobreZonaPegado"
+               [class.compacta]="imagenes.length > 0"
+               [class.pegado]="pegadoReciente"
+               role="button"
+               tabindex="0"
+               aria-label="Pegar o subir imágenes"
+               title="Pega con Ctrl+V o haz clic para elegir archivos"
+               (mouseenter)="sobreZonaPegado = true"
+               (mouseleave)="sobreZonaPegado = false"
+               (click)="fileInput.click()"
+               (keydown.enter)="fileInput.click()"
+               (keydown.space)="$event.preventDefault(); fileInput.click()">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M9 12h6"/><path d="M9 16h4"/></svg>
+            <div class="zona-pegado-txt">
+              <strong *ngIf="pegadoReciente">¡Imagen pegada!</strong>
+              <strong *ngIf="!pegadoReciente">{{sobreZonaPegado ? 'Pega ahora con Ctrl+V' : 'Pega una imagen con Ctrl+V'}}</strong>
+              <span *ngIf="!imagenes.length">También puedes arrastrar archivos desde tu PC o hacer clic aquí.</span>
+              <span *ngIf="imagenes.length">O arrastra más archivos. Para ordenar, arrastra las miniaturas.</span>
             </div>
           </div>
         </section>
@@ -199,6 +241,7 @@
               </div>
               <input class="campo field-texto caret-blue" [(ngModel)]="f.texto" [attr.aria-label]="'Texto del botón ' + (i + 1)" placeholder="Texto del botón" (blur)="guardarLink(f)" (keyup.enter)="guardarLink(f)" />
               <input class="campo field-url caret-blue" [(ngModel)]="f.url" [attr.aria-label]="'URL del botón ' + (i + 1)" placeholder="https://t.me/…" (blur)="guardarLink(f)" (keyup.enter)="guardarLink(f)" />
+              <input class="campo field-terabox caret-blue" [(ngModel)]="f.terabox_filename" [attr.aria-label]="'Archivo Terabox ' + (i + 1)" placeholder="Nombre del archivo (ej. VID_12345.rar)" (blur)="guardarLink(f)" (keyup.enter)="guardarLink(f)" />
               <button class="mini-ico x" (click)="eliminarLink(f)" aria-label="Eliminar botón" title="Eliminar botón">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
               </button>
@@ -208,6 +251,7 @@
           <div class="fila-boton fila-nueva">
             <input class="campo field-texto caret-blue" [(ngModel)]="nuevoTexto" aria-label="Texto del botón nuevo" placeholder="Texto nuevo (p. ej. Ver más)" (keyup.enter)="guardarNuevoLink()" />
             <input class="campo field-url caret-blue" [(ngModel)]="nuevaUrl" aria-label="URL del botón nuevo" placeholder="https://t.me/…" (keyup.enter)="guardarNuevoLink()" />
+            <input class="campo field-terabox caret-blue" [(ngModel)]="nuevaTerabox" aria-label="Archivo Terabox nuevo" placeholder="Nombre del archivo (ej. VID_12345.rar)" (keyup.enter)="guardarNuevoLink()" />
             <button class="mini-btn accente" (click)="guardarNuevoLink()" [disabled]="!nuevoTexto.trim() || !nuevaUrl.trim()">AÑADIR</button>
           </div>
         </section>

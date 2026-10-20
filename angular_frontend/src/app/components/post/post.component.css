@@ -306,7 +306,77 @@
   border-radius: var(--rad-input);
   overflow: hidden;
   background: var(--bg-elevated-2);
+  transition: box-shadow 0.12s ease, opacity 0.12s ease, border-color 0.12s ease;
 }
+.media-item[draggable="true"] { cursor: grab; }
+.media-item[draggable="true"]:active { cursor: grabbing; }
+.media-item.arrastrando { opacity: 0.4; }
+.media-item.drop-antes { box-shadow: inset 3px 0 0 var(--action); border-color: var(--action); }
+.media-item.drop-despues { box-shadow: inset -3px 0 0 var(--action); border-color: var(--action); }
+.media-ayuda { font-size: 0.78em; line-height: 1.5; margin-top: 8px; }
+
+/* ---------- soltar archivos / pegar ---------- */
+.zona-media { position: relative; }
+.zona-media.recibiendo { border-color: var(--action); }
+
+.media-drop {
+  position: absolute;
+  inset: 6px;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 16px;
+  text-align: center;
+  border: 2px dashed var(--action);
+  border-radius: calc(var(--rad-bubble) - 4px);
+  background: rgba(8, 14, 21, 0.86);
+  backdrop-filter: blur(3px);
+  color: var(--text-primary);
+  pointer-events: none;
+  animation: aparecer-soltar 0.12s ease;
+}
+.media-drop strong { font-size: 1em; font-weight: 600; }
+.media-drop span { font-size: 0.8em; color: var(--text-dimmed); }
+.media-drop svg { color: var(--action); }
+@keyframes aparecer-soltar {
+  from { opacity: 0; transform: scale(0.99); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.zona-pegado {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1.5px dashed var(--hairline);
+  border-radius: var(--rad-input);
+  background: var(--bg-input);
+  color: var(--text-dimmed);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+.zona-pegado:hover,
+.zona-pegado:focus-visible,
+.zona-pegado.activa {
+  border-color: var(--action);
+  background: var(--action-dim);
+  color: var(--text-primary);
+  outline: none;
+}
+.zona-pegado svg { flex: none; opacity: 0.85; }
+.zona-pegado-txt strong { display: block; font-size: 0.9em; font-weight: 600; }
+.zona-pegado-txt span { display: block; margin-top: 2px; font-size: 0.78em; color: var(--text-faint); }
+.zona-pegado.compacta { padding: 10px 14px; }
+.zona-pegado.compacta svg { width: 20px; height: 20px; }
+.zona-pegado.pegado {
+  border-color: var(--ok);
+  background: rgba(70, 210, 142, 0.1);
+  color: var(--ok);
+}
+.zona-pegado.pegado .zona-pegado-txt span { color: var(--text-dimmed); }
 .media-mini {
   position: relative;
   aspect-ratio: 1;
@@ -424,6 +494,17 @@
 .campo:focus { border-color: rgba(46, 166, 255, 0.55); }
 .field-texto { flex: 1 1 34%; min-width: 120px; }
 .field-url { flex: 1.5 1 44%; min-width: 160px; font-family: var(--mono); font-size: 0.88em; }
+.field-terabox {
+  flex: 1 1 28%;
+  min-width: 110px;
+  font-family: var(--mono);
+  font-size: 0.82em;
+  color: var(--text-primary);
+  border-style: dashed;
+  opacity: 0.85;
+}
+.field-terabox:focus { opacity: 1; }
+.field-terabox::placeholder { color: var(--text-faint); font-style: italic; }
 .fila-nueva { margin-top: 2px; }
 
 /* ---------- acciones ---------- */
@@ -560,4 +641,5 @@
   .barra-sub { max-width: 160px; }
   .fila-boton { flex-wrap: wrap; }
   .field-url { flex-basis: 100%; }
+  .field-terabox { flex-basis: 100%; }
 }
