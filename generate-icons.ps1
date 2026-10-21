@@ -1,6 +1,6 @@
-﻿# generate-icons.ps1 — CanalVideos
-# Genera el ícono de la app (Telegram + Video) en múltiples tamaños y arma favicon.ico
-# Diseño: cuadrado redondeado azul Telegram con play central blanco y perforaciones de film
+﻿# generate-icons.ps1 — CanalStudio
+# Genera el ícono de la app en múltiples tamaños y arma favicon.ico
+# Diseño: cuadrado redondeado azul con burbuja de publicación blanca y destello central
 param()
 $ErrorActionPreference = 'Stop'
 try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch {}
@@ -39,7 +39,7 @@ function Generate-Icon($size, $outPath){
     (New-Object System.Drawing.Point 0,0),
     (New-Object System.Drawing.Point $size,$size),
     [System.Drawing.Color]::FromArgb(15,23,42),   # #0F172A
-    [System.Drawing.Color]::FromArgb(14,165,233)  # #0EA5E9 / Telegram blue
+    [System.Drawing.Color]::FromArgb(46,166,255)  # #2EA6FF / acción CanalStudio
   )
   # Ajuste intermedio para simular 3 paradas: overlay con segundo gradiente
   $g.FillPath($brush, $bgPath)
@@ -58,84 +58,57 @@ function Generate-Icon($size, $outPath){
     $hiBrush.Dispose(); $hiPath.Dispose()
   }
 
-  # Perforaciones de film (solo en tamaños medianos/grandes)
-  if($size -ge 48){
-    $holeW = [int]($size * 0.07)
-    $holeH = [int]($size * 0.028)
-    if($holeH -lt 3){ $holeH = 3 }
-    $holeR = [int]($holeH * 0.5)
-    $gap = ($size * 0.68) / 6
-    $startY = [int]($size * 0.16)
-    $leftX = [int]($size * 0.06)
-    $rightX = [int]($size - $size*0.06 - $holeW)
-    $holeColor = [System.Drawing.Color]::FromArgb(210,255,255,255)
-    $holeBrush = New-Object System.Drawing.SolidBrush $holeColor
-    for($i=0; $i -lt 6; $i++){
-      $y = [int]($startY + $i*$gap)
-      $p1 = New-RoundedRectPath $leftX $y $holeW $holeH $holeR
-      $p2 = New-RoundedRectPath $rightX $y $holeW $holeH $holeR
-      $g.FillPath($holeBrush, $p1); $g.FillPath($holeBrush, $p2)
-      $p1.Dispose(); $p2.Dispose()
-    }
-    $holeBrush.Dispose()
-  }
+  # Burbuja de conversación: símbolo neutral de publicación y contenido
+  $bx = [float]($size * 0.235)
+  $by = [float]($size * 0.245)
+  $bw = [float]($size * 0.53)
+  $bh = [float]($size * 0.405)
+  $br = [float]($size * 0.105)
+  $bubble = New-RoundedRectPath $bx $by $bw $bh $br
 
-  # Sombra del play
-  $cx = $size/2 + $size*0.02
-  $cy = $size/2
-  $w = $size * 0.34
-  $h = $size * 0.42
-  $p1 = New-Object System.Drawing.PointF ([float]($cx - $w*0.45), [float]($cy - $h*0.5))
-  $p2 = New-Object System.Drawing.PointF ([float]($cx + $w*0.55), [float]($cy))
-  $p3 = New-Object System.Drawing.PointF ([float]($cx - $w*0.45), [float]($cy + $h*0.5))
+  $tail = New-Object System.Drawing.Drawing2D.GraphicsPath
+  $tail.AddPolygon(@(
+    (New-Object System.Drawing.PointF ([float]($bx + $bw*0.28), [float]($by + $bh - 1))),
+    (New-Object System.Drawing.PointF ([float]($bx + $bw*0.10), [float]($by + $bh + $size*0.13))),
+    (New-Object System.Drawing.PointF ([float]($bx + $bw*0.46), [float]($by + $bh - 1)))
+  ))
+
+  # Sombra de la burbuja
   $shadowOff = [Math]::Max(1, [int]($size*0.012))
   if($size -ge 32){
-    $shadowPath = New-Object System.Drawing.Drawing2D.GraphicsPath
-    $shadowPath.AddPolygon(@(
-      (New-Object System.Drawing.PointF ($p1.X+$shadowOff), ($p1.Y+$shadowOff)),
-      (New-Object System.Drawing.PointF ($p2.X+$shadowOff), ($p2.Y+$shadowOff)),
-      (New-Object System.Drawing.PointF ($p3.X+$shadowOff), ($p3.Y+$shadowOff))
-    ))
     $shadowBrush = New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(55,0,0,0))
-    $g.FillPath($shadowBrush, $shadowPath)
-    $shadowBrush.Dispose(); $shadowPath.Dispose()
+    $g.TranslateTransform($shadowOff, $shadowOff)
+    $g.FillPath($shadowBrush, $bubble)
+    $g.FillPath($shadowBrush, $tail)
+    $g.ResetTransform()
+    $shadowBrush.Dispose()
   }
 
-  # Play blanco (triángulo con esquinas levemente redondeadas vía path)
-  $playPath = New-Object System.Drawing.Drawing2D.GraphicsPath
-  # Triángulo con join redondeado
-  $playPath.AddPolygon(@($p1,$p2,$p3))
-  # Suavizado extra: si es grande, redondeo leve de esquinas con line join
-  $whiteBrush = New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(255,255,255))
-  $g.FillPath($whiteBrush, $playPath)
-  $whiteBrush.Dispose(); $playPath.Dispose()
+  $bubbleBrush = New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(255,255,255))
+  $g.FillPath($bubbleBrush, $bubble)
+  $g.FillPath($bubbleBrush, $tail)
+  $bubbleBrush.Dispose()
 
-  # Pequeño detalle: avión de Telegram sutil en el play (solo >=128 para no saturar)
-  if($size -ge 128){
-    # Avión pequeño en la esquina inferior derecha del triángulo
-    $planeSize = [int]($size * 0.13)
-    $px = [int]($cx + $w*0.18)
-    $py = [int]($cy + $h*0.22)
-    # Fondo del badge circular
-    $badgeR = [int]($planeSize * 0.55)
-    $badgeBrush = New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(255,255,255))
-    $g.FillEllipse($badgeBrush, ($px-$badgeR), ($py-$badgeR), ($badgeR*2), ($badgeR*2))
-    $badgeBrush.Dispose()
-    # Avión: path simple de papel
-    $planeColor = New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(14,165,233))
-    $planePath = New-Object System.Drawing.Drawing2D.GraphicsPath
-    $s = $planeSize * 0.32
-    $planePath.AddPolygon(@(
-      (New-Object System.Drawing.PointF ($px - $s*0.9), ($py - $s*0.15)),
-      (New-Object System.Drawing.PointF ($px + $s*0.9), ($py - $s*0.35)),
-      (New-Object System.Drawing.PointF ($px + $s*0.35), ($py + $s*0.05)),
-      (New-Object System.Drawing.PointF ($px + $s*0.55), ($py + $s*0.75)),
-      (New-Object System.Drawing.PointF ($px - $s*0.25), ($py + $s*0.25)),
-      (New-Object System.Drawing.PointF ($px - $s*0.55), ($py + $s*0.65))
-    ))
-    $g.FillPath($planeColor, $planePath)
-    $planeColor.Dispose(); $planePath.Dispose()
-  }
+  # Destello central: creación, edición y contenido
+  $cx = $bx + $bw/2
+  $cy = $by + $bh*0.48
+  $outer = [float]($size * 0.105)
+  $inner = [float]($outer * 0.27)
+  $spark = New-Object System.Drawing.Drawing2D.GraphicsPath
+  $spark.AddPolygon(@(
+    (New-Object System.Drawing.PointF ([float]$cx, [float]($cy-$outer))),
+    (New-Object System.Drawing.PointF ([float]($cx+$inner), [float]($cy-$inner))),
+    (New-Object System.Drawing.PointF ([float]($cx+$outer), [float]$cy)),
+    (New-Object System.Drawing.PointF ([float]($cx+$inner), [float]($cy+$inner))),
+    (New-Object System.Drawing.PointF ([float]$cx, [float]($cy+$outer))),
+    (New-Object System.Drawing.PointF ([float]($cx-$inner), [float]($cy+$inner))),
+    (New-Object System.Drawing.PointF ([float]($cx-$outer), [float]$cy)),
+    (New-Object System.Drawing.PointF ([float]($cx-$inner), [float]($cy-$inner)))
+  ))
+  $sparkBrush = New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(14,165,233))
+  $g.FillPath($sparkBrush, $spark)
+  $sparkBrush.Dispose(); $spark.Dispose()
+  $bubble.Dispose(); $tail.Dispose()
 
   $bgPath.Dispose()
   $g.Dispose()
@@ -145,7 +118,7 @@ function Generate-Icon($size, $outPath){
 }
 
 # Generar PNGs
-Write-Host 'Generando íconos CanalVideos...' -ForegroundColor Cyan
+Write-Host 'Generando íconos CanalStudio...' -ForegroundColor Cyan
 $sizes = @(512,256,128,64,48,32,24,16)
 foreach($s in $sizes){
   $p = Join-Path $assetsIconsDir "canalvideos-$s.png"
@@ -205,7 +178,7 @@ $svg = @'
 <svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img">
   <defs>
     <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#0F172A"/><stop offset="100%" stop-color="#0EA5E9"/>
+      <stop offset="0%" stop-color="#0F172A"/><stop offset="100%" stop-color="#2EA6FF"/>
     </linearGradient>
     <linearGradient id="hi" x1="0%" y1="0%" x2="0%" y2="100%">
       <stop offset="0%" stop-color="white" stop-opacity="0.18"/><stop offset="100%" stop-color="white" stop-opacity="0"/>
@@ -213,22 +186,16 @@ $svg = @'
   </defs>
   <rect x="0" y="0" width="256" height="256" rx="56" fill="url(#bg)"/>
   <rect x="1" y="1" width="254" height="122" rx="56" fill="url(#hi)"/>
-  <!-- perforaciones film -->
-  <g fill="white" opacity="0.82">
-    <rect x="15" y="41" width="18" height="7" rx="3.5"/><rect x="223" y="41" width="18" height="7" rx="3.5"/>
-    <rect x="15" y="69" width="18" height="7" rx="3.5"/><rect x="223" y="69" width="18" height="7" rx="3.5"/>
-    <rect x="15" y="97" width="18" height="7" rx="3.5"/><rect x="223" y="97" width="18" height="7" rx="3.5"/>
-    <rect x="15" y="125" width="18" height="7" rx="3.5"/><rect x="223" y="125" width="18" height="7" rx="3.5"/>
-    <rect x="15" y="153" width="18" height="7" rx="3.5"/><rect x="223" y="153" width="18" height="7" rx="3.5"/>
-    <rect x="15" y="181" width="18" height="7" rx="3.5"/><rect x="223" y="181" width="18" height="7" rx="3.5"/>
+  <!-- sombra burbuja -->
+  <g fill="black" opacity="0.18" transform="translate(4 4)">
+    <rect x="60" y="63" width="136" height="104" rx="27"/>
+    <path d="M 98 164 L 74 200 L 123 164 Z"/>
   </g>
-  <!-- sombra play -->
-  <path d="M 95 72 L 172 128 L 95 184 Z" fill="black" opacity="0.18"/>
-  <!-- play -->
-  <path d="M 93 70 L 170 128 L 93 186 Z" fill="white"/>
-  <!-- badge avión (solo visible en grande) -->
-  <circle cx="168" cy="168" r="18" fill="white"/>
-  <path d="M 158 166 L 178 161 L 171 167 L 174 178 L 166 170 L 155 177 Z" fill="#0EA5E9"/>
+  <!-- burbuja de publicación -->
+  <rect x="60" y="63" width="136" height="104" rx="27" fill="white"/>
+  <path d="M 98 164 L 74 200 L 123 164 Z" fill="white"/>
+  <!-- destello central -->
+  <path d="M 128 85 L 135.3 104.7 L 155 112 L 135.3 119.3 L 128 139 L 120.7 119.3 L 101 112 L 120.7 104.7 Z" fill="#0EA5E9"/>
 </svg>
 '@
 $svgPath = Join-Path $assetsIconsDir 'canalvideos.svg'

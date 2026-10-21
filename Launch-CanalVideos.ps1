@@ -9,10 +9,11 @@ param([int]$Port = $(if ($env:PORT) { [int]$env:PORT } else { 9000 }), [string]$
   [switch]$Multi)
 
 $AppName   = "CanalVideos"
-$AppTitle  = "CanalVideos"
+$BrandName = "CanalStudio"
+$AppTitle  = "CanalStudio"
 $JarName   = "crow-0.0.1-SNAPSHOT.jar"
-$SplashTit = "CANAL DE VIDEOS"
-$SplashSub = "Canales para tu comunidad"
+$SplashTit = "CanalStudio"
+$SplashSub = "Organiza y publica tu contenido"
 
 # Detecta GUI real (no solo UserInteractive) con timeout para no colgarse en headless/test
 $guiAvailable = $false
@@ -63,26 +64,26 @@ if (-not $iconos.Ok) {
 
 if (-not $JarPath) { $JarPath = Get-JarPath }
 if(-not $JarPath -or -not (Test-Path -LiteralPath $JarPath)){
-  [void](Show-Mensaje "No se encontró la aplicación compilada.`n`nEjecuta AsistenteDeCompilacion-CanalVideos.bat (te guía) o Build-And-Launch.bat." $AppName)
+  [void](Show-Mensaje "No se encontró la aplicación compilada.`n`nEjecuta AsistenteDeCompilacion-CanalVideos.bat (te guía) o Build-And-Launch.bat." $BrandName)
   Write-Host '[ERROR] Falta el jar: ejecuta AsistenteDeCompilacion-CanalVideos.bat o Build-And-Launch.bat.' -ForegroundColor Red
   exit 1
 }
 if (-not (Test-JarValido $JarPath)) {
-  [void](Show-Mensaje "La aplicación compilada está incompleta o dañada.`n`nVuelve a compilar con Build-And-Launch.bat o AsistenteDeCompilacion-CanalVideos.bat." $AppName)
+  [void](Show-Mensaje "La aplicación compilada está incompleta o dañada.`n`nVuelve a compilar con Build-And-Launch.bat o AsistenteDeCompilacion-CanalVideos.bat." $BrandName)
   Write-Host '[ERROR] Jar inválido o incompleto. Vuelve a compilar.' -ForegroundColor Red
   exit 1
 }
 $vc = Get-VCRedistEstado
 if (-not $vc.Ok) {
   $texto = "Falta Visual C++ 2015-2022 x64 (14.x).`n`n$($vc.Detalle)`n`nJava puede fallar con `"VCRUNTIME140.dll no encontrado`".`n`nEnlace oficial: $script:VCRedistUrl`n`nEjecuta AsistenteDeCompilacion-CanalVideos.bat y elige [5] para descargarlo e instalarlo."
-  [void](Show-Mensaje $texto $AppName)
+  [void](Show-Mensaje $texto $BrandName)
   Write-Host '[ERROR] Falta Visual C++ 2015-2022 x64. Ejecuta AsistenteDeCompilacion-CanalVideos.bat y elige [5].' -ForegroundColor Red
   Write-Host ("        Enlace oficial: {0}" -f $script:VCRedistUrl) -ForegroundColor Yellow
   exit 1
 }
 
 try { $javaExe = Resolve-JavaRuntime } catch {
-  [void](Show-Mensaje "No se pudo preparar Java: $($_.Exception.Message)" $AppName)
+  [void](Show-Mensaje "No se pudo preparar Java: $($_.Exception.Message)" $BrandName)
   Write-Host ("[ERROR] No se pudo preparar Java: {0}" -f $_.Exception.Message) -ForegroundColor Red
   exit 1
 }
@@ -121,7 +122,7 @@ public class Win32Front {
   } catch {}
   $found = $false
   foreach($procName in @("chrome","msedge")){
-    $procs = Get-Process -Name $procName -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle -like "*CanalVideos*" -or $_.MainWindowTitle -like "*CANAL DE VIDEOS*" }
+    $procs = Get-Process -Name $procName -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle -like "*CanalStudio*" -or $_.MainWindowTitle -like "*CanalVideos*" -or $_.MainWindowTitle -like "*CANAL DE VIDEOS*" }
     foreach($p in $procs){
       if($p.MainWindowHandle -ne [IntPtr]::Zero){
         try{
@@ -141,7 +142,7 @@ public class Win32Front {
     $tmpIcon = New-Object System.Windows.Forms.NotifyIcon
     $tmpIcon.Icon = [System.Drawing.SystemIcons]::Information
     $tmpIcon.Visible = $true
-    $tmpIcon.ShowBalloonTip(3000, $AppName, "Ya esta corriendo en http://localhost:$existingPort", [System.Windows.Forms.ToolTipIcon]::Info)
+    $tmpIcon.ShowBalloonTip(3000, $BrandName, "Ya esta corriendo en http://localhost:$existingPort", [System.Windows.Forms.ToolTipIcon]::Info)
     Start-Sleep -Seconds 2
     $tmpIcon.Visible = $false; $tmpIcon.Dispose()
   } catch{}
@@ -154,7 +155,7 @@ $script:exitRequested = $false
 
 function Test-PortFree([int]$p){ try{ $l=[System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Any,$p); $l.Start(); $l.Stop(); return $true } catch { return $false } }
 $orig=$Port; while(-not (Test-PortFree $Port)){ $Port++; if($Port -gt $orig+30){
-  [void](Show-Mensaje ("No hay puertos libres cerca de {0}.`n`nCierra otras aplicaciones y vuelve a intentarlo." -f $orig) $AppName)
+  [void](Show-Mensaje ("No hay puertos libres cerca de {0}.`n`nCierra otras aplicaciones y vuelve a intentarlo." -f $orig) $BrandName)
   if($mutex){ try{ $mutex.ReleaseMutex(); $mutex.Dispose() } catch{} }; exit 1
 } }
 # En modo pruebas el registro de instancia es por puerto (no pisa el de la app real).
@@ -164,7 +165,7 @@ if ($Multi) { $instanceFile = Join-Path $instanceDir "instance-$Port.json" }
 $cfg = Get-ConfigDbResumen
 if (-not $cfg.Ok) {
   $texto = "La configuración de la base de datos no es válida.`n`n{0}`n`nRevisa java_backend\config-db.yaml desde Configuración -> Datos.`nSi quieres volver a SQLite, renombra ese archivo y vuelve a iniciar." -f $cfg.Detalle
-  [void](Show-Mensaje $texto $AppName)
+  [void](Show-Mensaje $texto $BrandName)
   Write-Host ("[ERROR] Configuración de base de datos inválida: {0}" -f $cfg.Detalle) -ForegroundColor Red
   try{ Remove-Item $instanceFile -Force -ErrorAction SilentlyContinue } catch{}
   if($mutex){ try{ $mutex.ReleaseMutex(); $mutex.Dispose() } catch{} }
@@ -190,7 +191,7 @@ if ($guiAvailable) {
 try {
 Add-Type -AssemblyName System.Windows.Forms, System.Drawing -ErrorAction Stop | Out-Null
 $splash = New-Object System.Windows.Forms.Form
-$splash.Text = $AppName
+$splash.Text = $BrandName
 $splash.Size = New-Object System.Drawing.Size(460,240)
 $splash.StartPosition = "CenterScreen"
 $splash.FormBorderStyle = "None"
@@ -258,7 +259,7 @@ try {
   else { $trayIco = [System.Drawing.SystemIcons]::Application }
 } catch { $trayIco = [System.Drawing.SystemIcons]::Application }
 $notifyIcon.Icon = $trayIco
-$notifyIcon.Text = "$AppName :$Port"
+$notifyIcon.Text = "$BrandName :$Port"
 $notifyIcon.Visible = $true
 $contextMenu = New-Object System.Windows.Forms.ContextMenuStrip
 $menuOpen = $contextMenu.Items.Add("Abrir navegador")
@@ -274,10 +275,10 @@ $notifyIcon.ContextMenuStrip = $contextMenu
 $menuExit.Add_Click({ $script:exitRequested = $true; $notifyIcon.Visible=$false })
 $menuOpen.Add_Click({ Start-Process "http://localhost:$Port" })
 if($menuLanCopy){ $menuLanCopy.Add_Click({ Set-Clipboard $lanUrl; $notifyIcon.ShowBalloonTip(2200,"LAN","Copiado: $lanUrl",[System.Windows.Forms.ToolTipIcon]::Info) }) }
-if($menuLanShow){ $menuLanShow.Add_Click({ [System.Windows.Forms.MessageBox]::Show("Accede desde tu celular (misma WiFi):`n`n$lanUrl`n`nLocal: http://localhost:$Port",$AppName -f "LAN",[System.Windows.Forms.MessageBoxButtons]::OK,[System.Windows.Forms.MessageBoxIcon]::Information) | Out-Null }) }
+if($menuLanShow){ $menuLanShow.Add_Click({ [System.Windows.Forms.MessageBox]::Show("Accede desde tu celular (misma WiFi):`n`n$lanUrl`n`nLocal: http://localhost:$Port",$BrandName,[System.Windows.Forms.MessageBoxButtons]::OK,[System.Windows.Forms.MessageBoxIcon]::Information) | Out-Null }) }
 $menuLogs.Add_Click({ $dir = Join-Path $root "logs"; if(Test-Path $dir){ Start-Process explorer.exe $dir } })
 $notifyIcon.Add_DoubleClick({ Start-Process "http://localhost:$Port" })
-$notifyIcon.BalloonTipTitle = $AppName
+$notifyIcon.BalloonTipTitle = $BrandName
 $notifyIcon.BalloonTipText = if($lanUrl){"Listo en :$Port - LAN $lanUrl"} else {"Listo en :$Port"}
 } catch { Write-Host "[AVISO] Tray no disponible, continuo sin tray" -ForegroundColor Yellow; $notifyIcon = $null }
 }
@@ -327,7 +328,7 @@ try {
   $env:CROW_CLAVE_MAESTRA = [Convert]::ToBase64String([IO.File]::ReadAllBytes($claveBin))
 } catch {
   $detalle = $_.Exception.Message
-  [void](Show-Mensaje ("No se pudo preparar la configuración ni la clave maestra.`n`n{0}`n`nComprueba que la carpeta del proyecto permita escribir." -f $detalle) $AppName)
+  [void](Show-Mensaje ("No se pudo preparar la configuración ni la clave maestra.`n`n{0}`n`nComprueba que la carpeta del proyecto permita escribir." -f $detalle) $BrandName)
   Write-Host ("[ERROR] Configuración/clave: {0}" -f $detalle) -ForegroundColor Red
   Cleanup-AfterFailure
   exit 1
@@ -336,7 +337,7 @@ try {
   $apiProc=Start-Process -FilePath $javaExe -ArgumentList @("-jar","`"$JarPath`"","--server.port=$Port") -WorkingDirectory $root -PassThru -WindowStyle Hidden -RedirectStandardOutput $logOut -RedirectStandardError $logErr
 } catch {
   $detalle = $_.Exception.Message
-  [void](Show-Mensaje ("No se pudo iniciar Java.`n`n{0}`n`nComprueba que el puerto {1} esté libre y vuelve a intentarlo." -f $detalle, $Port) $AppName)
+  [void](Show-Mensaje ("No se pudo iniciar Java.`n`n{0}`n`nComprueba que el puerto {1} esté libre y vuelve a intentarlo." -f $detalle, $Port) $BrandName)
   Write-Host ("[ERROR] Java no pudo arrancar: {0}" -f $detalle) -ForegroundColor Red
   Cleanup-AfterFailure
   exit 1
@@ -352,7 +353,7 @@ while((Get-Date) -lt $deadline){
     Show-BackendFailure $logErr $logOut
     if($guiAvailable){
       Add-Type -AssemblyName System.Windows.Forms -ErrorAction SilentlyContinue
-      [System.Windows.Forms.MessageBox]::Show(("El backend se cerró (código {0}).`n`n{1}`n`nLog: {2}" -f $apiProc.ExitCode, $sugerencia, $logErr),$AppName,[System.Windows.Forms.MessageBoxButtons]::OK,[System.Windows.Forms.MessageBoxIcon]::Error) | Out-Null
+      [System.Windows.Forms.MessageBox]::Show(("El backend se cerró (código {0}).`n`n{1}`n`nLog: {2}" -f $apiProc.ExitCode, $sugerencia, $logErr),$BrandName,[System.Windows.Forms.MessageBoxButtons]::OK,[System.Windows.Forms.MessageBoxIcon]::Error) | Out-Null
     }
     exit 1
   }
@@ -372,7 +373,7 @@ if(-not $ready -and -not $script:exitRequested){
   Show-BackendFailure $logErr $logOut
   if($guiAvailable){
     Add-Type -AssemblyName System.Windows.Forms -ErrorAction SilentlyContinue
-    [System.Windows.Forms.MessageBox]::Show(("La aplicación no respondió a tiempo.`n`n{0}`n`nLog: {1}" -f $sugerencia, $logErr),$AppName,[System.Windows.Forms.MessageBoxButtons]::OK,[System.Windows.Forms.MessageBoxIcon]::Error) | Out-Null
+    [System.Windows.Forms.MessageBox]::Show(("La aplicación no respondió a tiempo.`n`n{0}`n`nLog: {1}" -f $sugerencia, $logErr),$BrandName,[System.Windows.Forms.MessageBoxButtons]::OK,[System.Windows.Forms.MessageBoxIcon]::Error) | Out-Null
   }
   exit 1
 }
@@ -387,7 +388,7 @@ $browser=$null; $cands=@("$env:ProgramFiles\Google\Chrome\Application\chrome.exe
 if(-not $browser){ foreach($n in @('chrome','msedge')){ $cmd=Get-Command $n -ErrorAction SilentlyContinue; if($cmd){ $browser=$cmd.Source; break } } }
 if(-not $browser){
   Add-Type -AssemblyName System.Windows.Forms -ErrorAction SilentlyContinue
-  [System.Windows.Forms.MessageBox]::Show("Chrome/Edge no encontrado.`nAbre a mano http://localhost:$Port`nBackend sigue en tray.","$AppName") | Out-Null
+  [System.Windows.Forms.MessageBox]::Show("Chrome/Edge no encontrado.`nAbre a mano http://localhost:$Port`nBackend sigue en tray.","$BrandName") | Out-Null
   $browserProc=$null
 } else {
   $profile=$profilePath

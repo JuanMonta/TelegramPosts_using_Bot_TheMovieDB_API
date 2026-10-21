@@ -11,7 +11,7 @@ import { DatosService, Respaldo } from './services/datos.service';
   styleUrls: ['./app.component.css']
 })
 export class AppComponent implements OnInit, OnDestroy {
-  title = 'CanalVideos';
+  title = 'CanalStudio';
 
   private killed = new Subject<void>();
   private respaldoTimer?: number;

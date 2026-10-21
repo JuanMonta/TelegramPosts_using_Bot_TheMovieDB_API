@@ -99,7 +99,7 @@ function Write-Paso([string]$Texto) { Write-Host $Texto -ForegroundColor Cyan }
 function Write-Ok([string]$Texto) { Write-Host $Texto -ForegroundColor Green }
 function Write-Aviso([string]$Texto) { Write-Host $Texto -ForegroundColor Yellow }
 
-function Show-Mensaje([string]$Texto, [string]$Titulo = 'CanalVideos') {
+function Show-Mensaje([string]$Texto, [string]$Titulo = 'CanalStudio') {
   $redirigido = $false
   try { $redirigido = [Console]::IsInputRedirected } catch {}
   if ($redirigido -or $env:CV_SIN_UI -eq '1') { return $false }

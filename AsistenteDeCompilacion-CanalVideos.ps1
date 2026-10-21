@@ -99,7 +99,7 @@ function Obtener-Estado {
 }
 
 function Mostrar-Resumen([object]$Estado) {
-  Write-Titulo 'CanalVideos - Asistente de compilación y arranque'
+  Write-Titulo 'CanalStudio - Asistente de compilación y arranque'
   Write-Host '  Esta ventana revisa tu equipo, prepara lo que falte y abre la app.' -ForegroundColor Gray
   Write-Host ("  Proyecto: {0}" -f $root) -ForegroundColor DarkGray
 
@@ -491,7 +491,7 @@ function Invocar-Abrir([string]$ModoBuild, [switch]$Preguntar, [switch]$ForzarBu
   $puertoActivo = Get-PuertoActivo
   if (Test-AppResponde -Puerto $puertoActivo -TimeOutSeg 2) {
     Write-Host ''
-    Write-Ok (" CanalVideos ya está abierta en http://localhost:{0}" -f $puertoActivo)
+    Write-Ok (" CanalStudio ya está abierta en http://localhost:{0}" -f $puertoActivo)
     try { [void](Start-AppDetached -Puerto $puertoActivo -JarPath (Get-JarPath)) } catch {}
     return $true
   }
@@ -526,7 +526,7 @@ function Invocar-Abrir([string]$ModoBuild, [switch]$Preguntar, [switch]$ForzarBu
   }
 
   Write-Host ''
-  Write-Ok (" Listo: CanalVideos está abierta en http://localhost:{0}" -f $script:Puerto)
+  Write-Ok (" Listo: CanalStudio está abierta en http://localhost:{0}" -f $script:Puerto)
   Write-Host '  La ventana de la app se abrirá sola. Puedes cerrar esta ventana o seguir en el menú.' -ForegroundColor Gray
   return $true
 }
@@ -534,10 +534,10 @@ function Invocar-Abrir([string]$ModoBuild, [switch]$Preguntar, [switch]$ForzarBu
 function Mostrar-Menu([object]$Estado) {
   Write-Seccion '¿Qué quieres hacer?'
   if ($Estado.Jar.Estado -ne 'ok') {
-    Write-Host '  [1] Abrir CanalVideos' -ForegroundColor White
+    Write-Host '  [1] Abrir CanalStudio' -ForegroundColor White
     Write-Host '      (recomendado: compilará lo que falte antes de abrir)' -ForegroundColor DarkGray
   } else {
-    Write-Host '  [1] Abrir CanalVideos' -ForegroundColor White
+    Write-Host '  [1] Abrir CanalStudio' -ForegroundColor White
   }
   Write-Host '  [2] Compilar y abrir' -ForegroundColor White
   Write-Host '  [3] Solo compilar' -ForegroundColor White
