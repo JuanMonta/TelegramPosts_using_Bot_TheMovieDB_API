@@ -492,13 +492,13 @@
   color: var(--text-primary);
 }
 .campo:focus { border-color: rgba(46, 166, 255, 0.55); }
-.field-texto { flex: 1 1 34%; min-width: 120px; }
-.field-url { flex: 1.5 1 44%; min-width: 160px; font-family: var(--mono); font-size: 0.88em; }
+.field-texto { flex: 1 1 28%; min-width: 120px; }
+.field-url { flex: 1.1 1 38%; min-width: 160px; font-family: var(--mono); font-size: 0.88em; }
 .field-terabox {
-  flex: 1 1 28%;
-  min-width: 110px;
+  flex: 1.2 1 40%;
+  min-width: 170px;
   font-family: var(--mono);
-  font-size: 0.82em;
+  font-size: 0.78em;
   color: var(--text-primary);
   border-style: dashed;
   opacity: 0.85;

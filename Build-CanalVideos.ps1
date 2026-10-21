@@ -30,7 +30,7 @@ try {
   $dist = Join-Path $ngDir 'dist\CanalVideos'
   $requiereFrontend = -not $SkipFrontend
 
-  Write-Titulo 'CanalVideos - Compilación'
+  Write-Titulo 'CanalStudio - Compilación'
   Write-Host '  Elige el tipo de compilación. Después se revisará el entorno.' -ForegroundColor Gray
 
   # --- Modo de compilación (memoria + menú con cuenta atrás) ---

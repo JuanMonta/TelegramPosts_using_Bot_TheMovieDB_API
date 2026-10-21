@@ -241,7 +241,7 @@
               </div>
               <input class="campo field-texto caret-blue" [(ngModel)]="f.texto" [attr.aria-label]="'Texto del botón ' + (i + 1)" placeholder="Texto del botón" (blur)="guardarLink(f)" (keyup.enter)="guardarLink(f)" />
               <input class="campo field-url caret-blue" [(ngModel)]="f.url" [attr.aria-label]="'URL del botón ' + (i + 1)" placeholder="https://t.me/…" (blur)="guardarLink(f)" (keyup.enter)="guardarLink(f)" />
-              <input class="campo field-terabox caret-blue" [(ngModel)]="f.terabox_filename" [attr.aria-label]="'Archivo Terabox ' + (i + 1)" placeholder="Nombre del archivo (ej. VID_12345.rar)" (blur)="guardarLink(f)" (keyup.enter)="guardarLink(f)" />
+              <input class="campo field-terabox caret-blue" [(ngModel)]="f.terabox_filename" [attr.aria-label]="'Notas internas del enlace ' + (i + 1)" placeholder="Notas internas (opcional)" (blur)="guardarLink(f)" (keyup.enter)="guardarLink(f)" />
               <button class="mini-ico x" (click)="eliminarLink(f)" aria-label="Eliminar botón" title="Eliminar botón">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
               </button>
@@ -251,7 +251,7 @@
           <div class="fila-boton fila-nueva">
             <input class="campo field-texto caret-blue" [(ngModel)]="nuevoTexto" aria-label="Texto del botón nuevo" placeholder="Texto nuevo (p. ej. Ver más)" (keyup.enter)="guardarNuevoLink()" />
             <input class="campo field-url caret-blue" [(ngModel)]="nuevaUrl" aria-label="URL del botón nuevo" placeholder="https://t.me/…" (keyup.enter)="guardarNuevoLink()" />
-            <input class="campo field-terabox caret-blue" [(ngModel)]="nuevaTerabox" aria-label="Archivo Terabox nuevo" placeholder="Nombre del archivo (ej. VID_12345.rar)" (keyup.enter)="guardarNuevoLink()" />
+            <input class="campo field-terabox caret-blue" [(ngModel)]="nuevaTerabox" aria-label="Notas internas del enlace nuevo" placeholder="Notas internas (opcional)" (keyup.enter)="guardarNuevoLink()" />
             <button class="mini-btn accente" (click)="guardarNuevoLink()" [disabled]="!nuevoTexto.trim() || !nuevaUrl.trim()">AÑADIR</button>
           </div>
         </section>

@@ -59,7 +59,7 @@ if (-not (Test-PuertoLibre $Port)) {
   $Port = $libre
 }
 
-Write-Paso ("Abriendo CanalVideos en http://localhost:{0} ..." -f $Port)
+Write-Paso ("Abriendo CanalStudio en http://localhost:{0} ..." -f $Port)
 $launcherProc = $null
 try {
   $launcherProc = Start-AppDetached -Puerto $Port -JarPath $jar
@@ -75,7 +75,7 @@ if (-not (Wait-AppReady -Puerto $Port -Segundos 90 -Launcher $launcherProc)) {
 }
 
 Write-Host ''
-Write-Ok (" Listo: CanalVideos está abierta en http://localhost:{0}" -f $Port)
+Write-Ok (" Listo: CanalStudio está abierta en http://localhost:{0}" -f $Port)
 Write-Host ' Esta ventana se cerrará sola.' -ForegroundColor DarkGray
 Start-Sleep -Milliseconds 900
 exit 0
