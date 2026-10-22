@@ -16,8 +16,8 @@ import java.time.Duration;
 @Service
 public class TelegramInfoService {
 
-    private static final Duration CONEXION_TIMEOUT = Duration.ofSeconds(10);
-    private static final Duration LECTURA_TIMEOUT = Duration.ofSeconds(15);
+    private static final Duration CONEXION_TIMEOUT = Duration.ofSeconds(5);
+    private static final Duration LECTURA_TIMEOUT = Duration.ofSeconds(10);
 
     private final RestClient restClient = RestClient.builder()
             .baseUrl("https://api.telegram.org")
@@ -71,7 +71,7 @@ public class TelegramInfoService {
         if (c.isEmpty()) throw new IllegalArgumentException("El chat_id es obligatorio");
         try {
             String respBody = restClient.get()
-                    .uri("/bot" + t + "/getChat?chat_id=" + java.net.URLEncoder.encode(c, java.nio.charset.StandardCharsets.UTF_8))
+                    .uri(uriChat(t, "getChat", c))
                     .retrieve()
                     .onStatus(HttpStatusCode::isError, (request, response) -> {
                         String texto = new String(response.getBody().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
@@ -105,7 +105,7 @@ public class TelegramInfoService {
         if (c.isEmpty()) throw new IllegalArgumentException("El chat_id es obligatorio");
         try {
             String respBody = restClient.get()
-                    .uri("/bot" + t + "/getChatAdministrators?chat_id=" + java.net.URLEncoder.encode(c, java.nio.charset.StandardCharsets.UTF_8))
+                    .uri(uriChat(t, "getChatAdministrators", c))
                     .retrieve()
                     .onStatus(HttpStatusCode::isError, (request, response) -> {
                         String texto = new String(response.getBody().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
@@ -125,6 +125,15 @@ public class TelegramInfoService {
         } catch (Exception e) {
             throw new IllegalStateException("No se pudo llamar a Telegram getChatAdministrators: " + e.getMessage());
         }
+    }
+
+    /**
+     * URI ya codificada. Se pasa como URI (no como String) para que RestClient
+     * no vuelva a codificar el % de @usuario y Telegram reciba "%40nombre".
+     */
+    private java.net.URI uriChat(String token, String metodo, String chatId) {
+        String q = java.net.URLEncoder.encode(chatId, java.nio.charset.StandardCharsets.UTF_8);
+        return java.net.URI.create("https://api.telegram.org/bot" + token + "/" + metodo + "?chat_id=" + q);
     }
 
     private String descripcion(String texto) {

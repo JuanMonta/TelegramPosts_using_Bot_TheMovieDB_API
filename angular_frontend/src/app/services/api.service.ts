@@ -44,6 +44,6 @@ export class ApiService {
   }
 
   private fallar<T>(e: HttpErrorResponse): Observable<never> {
-    return throwError(() => e);
+    return throwError(e);
   }
 }

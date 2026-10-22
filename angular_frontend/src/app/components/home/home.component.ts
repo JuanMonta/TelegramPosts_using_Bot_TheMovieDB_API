@@ -2,7 +2,7 @@ import { Component, ElementRef, OnDestroy, OnInit, ViewChild } from '@angular/co
 import { NavigationEnd, Router } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { Subject } from 'rxjs';
+import { Subject, TimeoutError } from 'rxjs';
 import { takeUntil, timeout } from 'rxjs/operators';
 import { PublicacionesService } from '../../services/publicaciones.service';
 import { TmdbService } from '../../services/tmdb.service';
@@ -13,6 +13,7 @@ import { ConfiguracionService, ConfiguracionTelegram } from '../../services/conf
 import { AcoplamientoService } from '../../services/acoplamiento.service';
 import { CanalService } from '../../services/canal.service';
 import { BotService } from '../../services/bot.service';
+import { PreferenciasService } from '../../services/preferencias.service';
 import { ConjuntoTrabajoService } from '../../services/conjunto-trabajo.service';
 import {
   Acoplamiento,
@@ -215,6 +216,7 @@ export class HomeComponent implements OnInit, OnDestroy {
     private acoplamientoSvc: AcoplamientoService,
     private canalSvc: CanalService,
     private botSvc: BotService,
+    private prefSvc: PreferenciasService,
     private trabajo: ConjuntoTrabajoService
   ) {}
   ngOnInit(): void {
@@ -856,25 +858,48 @@ export class HomeComponent implements OnInit, OnDestroy {
   }
   private static readonly CLAVE_BOT_DETECTAR = 'crow_bot_detectar';
 
-  /** Recupera el bot para detectar guardado; si ya no existe, lo limpia. */
+  /** Recupera el bot para detectar guardado en el backend; lo valida contra los bots vigentes. */
   private restaurarBotDetectar(): void {
+    this.prefSvc.obtenerBotDetectar().pipe(takeUntil(this.killed)).subscribe({
+      next: (r) => this.aplicarBotDetectar(r?.bot_id ?? null),
+      error: () => this.aplicarBotDetectar(this.botDetectarLocal())
+    });
+  }
+
+  private botDetectarLocal(): number | null {
     try {
       const raw = localStorage.getItem(HomeComponent.CLAVE_BOT_DETECTAR);
       const id = raw === null ? NaN : Number(raw);
-      this.nuevoCanalBotDetectar = !Number.isNaN(id) && this.bots.some((b) => b.id === id) ? id : null;
-      if (raw !== null && this.nuevoCanalBotDetectar === null) localStorage.removeItem(HomeComponent.CLAVE_BOT_DETECTAR);
+      return Number.isNaN(id) ? null : id;
     } catch {
-      this.nuevoCanalBotDetectar = null;
+      return null;
     }
   }
 
-  guardarBotDetectar(): void {
+  private aplicarBotDetectar(id: number | null): void {
+    const vigente = id !== null && this.bots.some((b) => b.id === id && b.activo !== false);
+    this.nuevoCanalBotDetectar = vigente ? id : null;
     try {
       if (this.nuevoCanalBotDetectar === null) localStorage.removeItem(HomeComponent.CLAVE_BOT_DETECTAR);
       else localStorage.setItem(HomeComponent.CLAVE_BOT_DETECTAR, String(this.nuevoCanalBotDetectar));
     } catch {
-      // sin almacenamiento: la selección vive solo en memoria
+      // sin almacenamiento local: manda la preferencia del backend
     }
+  }
+
+  guardarBotDetectar(id: number | null = this.nuevoCanalBotDetectar): void {
+    const vigente = id !== null && this.bots.some((b) => b.id === id && b.activo !== false);
+    this.nuevoCanalBotDetectar = vigente ? id : null;
+    try {
+      if (this.nuevoCanalBotDetectar === null) localStorage.removeItem(HomeComponent.CLAVE_BOT_DETECTAR);
+      else localStorage.setItem(HomeComponent.CLAVE_BOT_DETECTAR, String(this.nuevoCanalBotDetectar));
+    } catch {
+      // la preferencia igual se guarda en el backend
+    }
+    this.prefSvc.guardarBotDetectar(this.nuevoCanalBotDetectar).pipe(takeUntil(this.killed)).subscribe({
+      error: (e: HttpErrorResponse) => this.snack.open(
+        'No se pudo guardar el bot para detectar: ' + this.api.mensajeDeError(e), 'OK', { duration: 6000 })
+    });
   }
   agregarBot(): void {
     if (!this.nuevoBotNombre.trim() || !this.nuevoBotToken.trim()) return;
@@ -972,13 +997,11 @@ export class HomeComponent implements OnInit, OnDestroy {
       error: (e: unknown) => {
         this.detectandoCanal = false;
         this.iniciarCooldownDeteccion();
-        if (e instanceof HttpErrorResponse) {
-          this.deteccionCanal = null;
-          this.snack.open(this.api.mensajeDeError(e), 'OK', { duration: 6000 });
-        } else {
-          // Timeout del lado del navegador (25s sin respuesta).
-          this.deteccionCanal = null;
+        this.deteccionCanal = null;
+        if (e instanceof TimeoutError) {
           this.snack.open('La detección tardó demasiado (más de 25 segundos). Revisa el ID e inténtalo de nuevo.', 'OK', { duration: 6000 });
+        } else {
+          this.snack.open(this.api.mensajeDeError(e as HttpErrorResponse), 'OK', { duration: 6000 });
         }
       }
     });
@@ -1069,12 +1092,11 @@ export class HomeComponent implements OnInit, OnDestroy {
       error: (e: unknown) => {
         this.canalRedetectando = false;
         this.iniciarCooldownDeteccion();
-        if (e instanceof HttpErrorResponse) {
-          this.canalEditDeteccion = null;
-          this.snack.open(this.api.mensajeDeError(e), 'OK', { duration: 6000 });
-        } else {
-          this.canalEditDeteccion = null;
+        this.canalEditDeteccion = null;
+        if (e instanceof TimeoutError) {
           this.snack.open('La detección tardó demasiado (más de 25 segundos). Revisa el ID e inténtalo de nuevo.', 'OK', { duration: 6000 });
+        } else {
+          this.snack.open(this.api.mensajeDeError(e as HttpErrorResponse), 'OK', { duration: 6000 });
         }
       }
     });
