@@ -98,7 +98,7 @@ public class CanalService {
         if (token == null || token.isBlank()) {
             throw new IllegalArgumentException("El bot elegido no tiene token legible. Revísalo en la pestaña Bots.");
         }
-        tools.jackson.databind.JsonNode r = info.getChat(token, idChat);
+        tools.jackson.databind.JsonNode r = getChatConAyuda(token, idChat, botId);
         Map<String, Object> m = new LinkedHashMap<>();
         String type = r.path("type").asText("");
         m.put("type", type);
@@ -148,6 +148,31 @@ public class CanalService {
         }
         m.put("admin_bots", adminBots);
         return m;
+    }
+
+    private tools.jackson.databind.JsonNode getChatConAyuda(String token, String idChat, Long botId) {
+        try {
+            return info.getChat(token, idChat);
+        } catch (IllegalStateException e) {
+            String detalle = e.getMessage() == null ? "" : e.getMessage();
+            if (detalle.toLowerCase().contains("chat not found")) {
+                throw new IllegalStateException("Telegram no encuentra " + idChat
+                        + ". Para canales y grupos, añade " + nombreBot(botId)
+                        + " como administrador (aunque el canal sea público) y vuelve a intentar."
+                        + " Si el @usuario cambió, revisa el enlace t.me.");
+            }
+            throw e;
+        }
+    }
+
+    private String nombreBot(Long botId) {
+        if (botId == null) return "el bot elegido";
+        return bots.findById(botId).map(b -> {
+            String username = b.getUsername() == null ? "" : b.getUsername().trim();
+            if (!username.isEmpty()) return "@" + username;
+            String nombre = b.getNombre() == null ? "" : b.getNombre().trim();
+            return nombre.isEmpty() ? "el bot elegido" : nombre;
+        }).orElse("el bot elegido");
     }
 
     /**

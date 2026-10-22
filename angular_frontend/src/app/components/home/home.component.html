@@ -824,9 +824,9 @@
           </div>
           <div class="cfg-fila cfg-fila-detect">
             <span class="cfg-ayuda">Bot para detectar:</span>
-            <select class="cfg-input cfg-input-sm" [(ngModel)]="nuevoCanalBotDetectar" (change)="guardarBotDetectar()" aria-label="Bot comodín solo para detectar">
-              <option [ngValue]="null">Elegir…</option>
-              <option *ngFor="let b of bots" [ngValue]="b.id">{{b.nombre}}</option>
+            <select class="cfg-input cfg-input-sm" [ngModel]="nuevoCanalBotDetectar" (ngModelChange)="guardarBotDetectar($event)" aria-label="Bot comodín solo para detectar">
+              <option [ngValue]="null">Elegir.</option>
+              <option *ngFor="let b of bots" [ngValue]="b.id" [disabled]="b.activo === false">{{b.nombre}}</option>
             </select>
             <button class="cfg-mini" (click)="detectarCanal()" [disabled]="!nuevoCanalChatId.trim() || !nuevoCanalBotDetectar || detectandoCanal || deteccionCooldown > 0" [title]="!nuevoCanalBotDetectar ? 'Primero elige el bot para detectar' : (deteccionCooldown > 0 ? 'Espera unos segundos antes de volver a detectar' : 'Detectar tipo y bots administradores')">{{detectandoCanal ? 'DETECTANDO…' : (deteccionCooldown > 0 ? 'ESPERA ' + deteccionCooldown + 's' : 'DETECTAR')}}</button>
           </div>
@@ -843,7 +843,7 @@
           <span class="cfg-ayuda" *ngIf="adminErrorDetect">{{adminErrorDetect}}</span>
           <span class="cfg-ayuda" *ngIf="!bots.length">Todavía no tienes ningún bot: crea el primero en la pestaña Bots. Sin bot no se puede DETECTAR (igual puedes añadir el destino escribiendo su nombre a mano).</span>
           <span class="cfg-ayuda" *ngIf="bots.length && !nuevoCanalBotDetectar">⬆ Elige el bot para detectar: puede ser uno dedicado solo a eso, sin asignarlo a ningún destino.</span>
-          <span class="cfg-ayuda">La detección pregunta a Telegram por ese canal usando el bot elegido; también lista los bots que son administradores allí para que los registres. Hay que esperar 10 segundos entre detecciones para no saturar Telegram, y si una tarda más de 25 segundos se cancela sola.</span>
+          <span class="cfg-ayuda">La detección pregunta a Telegram por ese canal usando el bot elegido; también lista los bots que son administradores allí para que los registres. Para canales y grupos, el bot debe estar dentro como administrador, aunque el canal sea público. Hay que esperar 10 segundos entre detecciones para no saturar Telegram, y si una tarda más de 25 segundos se cancela sola.</span>
         </div>
       </div>
 
