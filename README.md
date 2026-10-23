@@ -18,7 +18,7 @@
 
 ## Qué es
 
-CanalVideos es una herramienta local para organizar y publicar contenido en canales y grupos de Telegram.
+CanalStudio es una herramienta local para organizar y publicar contenido en canales y grupos de Telegram.
 
 Reúne en una sola pantalla la ficha, la imagen, el texto del post, los botones, los enlaces y la vista previa del mensaje. Cuando todo está listo, publica al instante o deja la publicación programada.
 
@@ -67,14 +67,14 @@ TMDB es la integración de ejemplo para importar fichas y pósters. Si vas a cre
 
 1. Crea una cuenta gratuita en [themoviedb.org](https://www.themoviedb.org/).
 2. Entra en **Configuración → API** y copia el **API Read Access Token**.
-3. En CanalVideos, abre **Configuración** (el engranaje) → **Ajustes**.
+3. En CanalStudio, abre **Configuración** (el engranaje) → **Ajustes**.
 4. Pega el token en **TOKEN DE TMDB** y pulsa **GUARDAR**.
 
 ### 3. Conecta tu bot y tus destinos
 
 1. En Telegram, habla con [@BotFather](https://t.me/BotFather), crea un bot y copia su token.
 2. Añade el bot como **administrador** de tu canal o grupo.
-3. En CanalVideos, abre **Configuración → Bots** y registra el bot.
+3. En CanalStudio, abre **Configuración → Bots** y registra el bot.
 4. En **Configuración → Destinos**, escribe el `@usuario` o el ID de tu destino, pulsa **DETECTAR** y asígnale el bot.
 
 Si quieres publicar en varios canales o grupos a la vez, créalos primero en **Destinos** y luego reúnelos en **Conjuntos**.
@@ -144,13 +144,13 @@ Usa **PRUEBA** hasta que el post esté perfecto. El cambio se aplica al instante
 
 - Tus datos, pósters y borradores se guardan en tu PC.
 - Los tokens se almacenan protegidos localmente.
-- CanalVideos no envía tus datos a servidores propios.
+- CanalStudio no envía tus datos a servidores propios.
 - Solo TMDB y Telegram reciben la información necesaria para buscar y publicar.
 - No compartas la carpeta de configuración, los logs ni la clave maestra.
 
 ## Tecnología
 
-CanalVideos usa Angular para la interfaz y Spring Boot (Java 17) para el backend. Los scripts de Windows preparan el entorno y los runtimes portátiles automáticamente.
+CanalStudio usa Angular para la interfaz y Spring Boot (Java 17) para el backend. Los scripts de Windows preparan el entorno y los runtimes portátiles automáticamente.
 
 No necesitas conocer el stack para usarlo.
 
@@ -162,5 +162,5 @@ No necesitas conocer el stack para usarlo.
 
 <p align="center">
   Este producto usa la API de TMDB, pero no está avalado ni certificado por TMDB.<br>
-  Telegram es una marca de Telegram Messenger LLP. CanalVideos no está afiliado a Telegram.
+  Telegram es una marca de Telegram Messenger LLP. CanalStudio no está afiliado a Telegram.
 </p>
