@@ -2,7 +2,7 @@
   <img src="CanalVideos.png" width="88" alt="Icono de CanalVideos">
 </p>
 
-<h1 align="center">CanalVideos</h1>
+<h1 align="center">CanalStudio</h1>
 
 <p align="center">
   <strong>Organiza, prepara y publica contenido en tu canal de Telegram.</strong>
