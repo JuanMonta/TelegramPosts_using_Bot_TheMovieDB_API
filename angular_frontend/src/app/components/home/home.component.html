@@ -73,7 +73,7 @@
             </div>
             <ul class="lista">
               <li
-                *ngFor="let hit of resultados"
+                *ngFor="let hit of resultados; trackBy: trackByHit"
                 class="fila rise-in"
                 [class.fila-cargando]="guardandoTmdb[hit.id]"
                 (click)="guardar(hit)"
@@ -180,7 +180,7 @@
           <div class="cal-grid">
             <span *ngFor="let d of diasSemana" class="cal-dow">{{d}}</span>
             <button
-              *ngFor="let c of celdasMes()"
+              *ngFor="let c of celdasMes(); trackBy: trackByCeldaClave"
               class="cal-celda"
               [class.fuera]="c.fuera"
               [class.hoy]="c.hoy"
@@ -371,7 +371,7 @@
       </div>
 
       <div *ngIf="!cargandoComentarios && comentariosPost.length" class="pc-lista">
-        <div *ngFor="let c of comentariosPost" class="pc-msg">
+        <div *ngFor="let c of comentariosPost; trackBy: trackByComentarioId" class="pc-msg">
           <span class="pc-msg-autor">{{c.autor}}</span>
           <span class="pc-msg-texto">{{c.texto}}</span>
           <span class="pc-msg-fecha">{{c.fecha | date:'short'}}</span>
@@ -419,11 +419,11 @@
     <div class="cola-alta">
       <select class="cola-select" [(ngModel)]="colaNuevoId" title="Elige un borrador">
         <option [ngValue]="0" disabled>Elige un borrador…</option>
-        <option *ngFor="let t of colaBorradores()" [ngValue]="t.publicacion_id">{{t.titulo}}</option>
+        <option *ngFor="let t of colaBorradores(); trackBy: trackByPublicacionId" [ngValue]="t.publicacion_id">{{t.titulo}}</option>
       </select>
       <select class="cola-select" [(ngModel)]="colaNuevoAcoplamiento" title="Elige un conjunto">
         <option [ngValue]="null">Sin conjunto (canal por defecto)</option>
-        <option *ngFor="let a of acoplamientos" [ngValue]="a.id">{{a.nombre}}</option>
+        <option *ngFor="let a of acoplamientos; trackBy: trackByAcoplamientoId" [ngValue]="a.id">{{a.nombre}}</option>
       </select>
       <button class="cola-dia" [class.esta]="colaDiaSel" (click)="toggleColaCalendario()" title="Elegir el día en el calendario" aria-haspopup="true" [attr.aria-expanded]="colaCalActivo">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/></svg>
@@ -688,7 +688,7 @@
         </div>
         <span class="cfg-ayuda">Luego asígnalo a cada destino en la pestaña Destinos.</span>
         <div class="cfg-lista">
-          <div class="cfg-card" *ngFor="let b of bots">
+          <div class="cfg-card" *ngFor="let b of bots; trackBy: trackByBotId">
             <div class="cfg-card-fila" *ngIf="botEditando !== b.id">
               <div class="cfg-avatar" aria-hidden="true">{{b.nombre.trim().charAt(0).toUpperCase() || 'B'}}</div>
               <div class="cfg-card-main">
@@ -752,7 +752,7 @@
         </div>
         <span class="cfg-ayuda"><b>REAL</b> = canal público. <b>PRUEBA</b> = canal privado de ensayos. Si es canal o grupo, la app lo detecta sola.</span>
         <div class="cfg-lista">
-          <div class="cfg-card" *ngFor="let c of canales">
+          <div class="cfg-card" *ngFor="let c of canales; trackBy: trackByCanalId">
             <div class="cfg-card-fila" *ngIf="canalEditando !== c.id">
               <div class="cfg-card-main">
                 <div class="cfg-card-nombre">{{c.nombre}}</div>
@@ -785,7 +785,7 @@
                 </select>
                 <select class="cfg-input" [(ngModel)]="canalEditBot" aria-label="Bot asignado">
                   <option [ngValue]="null">Sin bot asignado</option>
-                  <option *ngFor="let b of bots" [ngValue]="b.id">{{b.nombre}}</option>
+                  <option *ngFor="let b of bots; trackBy: trackByBotId" [ngValue]="b.id">{{b.nombre}}</option>
                 </select>
                 <button class="cfg-mini" (click)="redetectarCanalEdit()" [disabled]="!canalEditChatId.trim() || !canalEditBot || canalRedetectando || deteccionCooldown > 0" [title]="!canalEditBot ? 'Primero elige un bot' : (deteccionCooldown > 0 ? 'Espera unos segundos antes de volver a detectar' : 'Redetectar tipo')">{{canalRedetectando ? 'REDETECTANDO…' : (deteccionCooldown > 0 ? 'ESPERA ' + deteccionCooldown + 's' : 'REDETECTAR')}}</button>
               </div>
@@ -818,7 +818,7 @@
             </select>
             <select class="cfg-input" [(ngModel)]="nuevoCanalBot" aria-label="Bot que publicará en el nuevo destino">
               <option [ngValue]="null">Bot que publica: sin asignar</option>
-              <option *ngFor="let b of bots" [ngValue]="b.id">Bot que publica: {{b.nombre}}</option>
+              <option *ngFor="let b of bots; trackBy: trackByBotId" [ngValue]="b.id">Bot que publica: {{b.nombre}}</option>
             </select>
             <button class="cfg-mini cfg-mini-acento" (click)="agregarCanal()" [disabled]="nuevoCanalNombre.trim().length < NOMBRE_CANAL_MIN || !nuevoCanalChatId.trim() || agregandoCanal">{{agregandoCanal ? 'AÑADIENDO…' : 'AÑADIR'}}</button>
           </div>
@@ -826,13 +826,13 @@
             <span class="cfg-ayuda">Bot para detectar:</span>
             <select class="cfg-input cfg-input-sm" [ngModel]="nuevoCanalBotDetectar" (ngModelChange)="guardarBotDetectar($event)" aria-label="Bot comodín solo para detectar">
               <option [ngValue]="null">Elegir.</option>
-              <option *ngFor="let b of bots" [ngValue]="b.id" [disabled]="b.activo === false">{{b.nombre}}</option>
+              <option *ngFor="let b of bots; trackBy: trackByBotId" [ngValue]="b.id" [disabled]="b.activo === false">{{b.nombre}}</option>
             </select>
             <button class="cfg-mini" (click)="detectarCanal()" [disabled]="!nuevoCanalChatId.trim() || !nuevoCanalBotDetectar || detectandoCanal || deteccionCooldown > 0" [title]="!nuevoCanalBotDetectar ? 'Primero elige el bot para detectar' : (deteccionCooldown > 0 ? 'Espera unos segundos antes de volver a detectar' : 'Detectar tipo y bots administradores')">{{detectandoCanal ? 'DETECTANDO…' : (deteccionCooldown > 0 ? 'ESPERA ' + deteccionCooldown + 's' : 'DETECTAR')}}</button>
           </div>
           <span class="cfg-ayuda" *ngIf="deteccionCanal">{{deteccionCanal}}</span>
           <div class="cfg-miembros" *ngIf="adminBotsDetectados.length">
-            <div class="cfg-miembro" *ngFor="let ab of adminBotsDetectados">
+            <div class="cfg-miembro" *ngFor="let ab of adminBotsDetectados; trackBy: trackByAdminBotId">
               <div class="cfg-miembro-main">
                 <span class="cfg-miembro-nombre">{{ab.nombre || '@' + ab.username || 'Bot sin nombre'}}</span>
                 <span class="tally tally-chips"><span class="mono" *ngIf="ab.username">@{{ab.username}}</span><span class="chip chip-admin">ADMINISTRADOR</span><span class="chip chip-live" *ngIf="ab.registrado" [title]="ab.bot_nombre ? 'Ya registrado como ' + ab.bot_nombre : 'Ya registrado'">REGISTRADO</span></span>
@@ -858,7 +858,7 @@
           <span class="chip" title="Conjuntos">{{acoplamientos.length}} conjunto<ng-container *ngIf="acoplamientos.length !== 1">s</ng-container></span>
         </div>
         <div class="cfg-lista">
-          <div class="cfg-card" *ngFor="let a of acoplamientos" [class.abierta]="acoplamientoSeleccionado === a.id">
+          <div class="cfg-card" *ngFor="let a of acoplamientos; trackBy: trackByAcoplamientoId" [class.abierta]="acoplamientoSeleccionado === a.id">
             <div class="cfg-card-fila">
               <div class="cfg-card-main">
                 <div class="cfg-card-nombre" *ngIf="acopRenombrando !== a.id">{{a.nombre}}</div>
@@ -869,7 +869,7 @@
                 </div>
                 <div class="cfg-card-sub tally">{{miembrosPorModo(a, 'real').length}} REAL · {{miembrosPorModo(a, 'test').length}} PRUEBA</div>
                 <div class="cfg-miembros-resumen" *ngIf="acoplamientoSeleccionado !== a.id">
-                  <span class="chip" *ngFor="let m of miembrosDe(a).slice(0, 4)">{{m.nombre}}</span>
+                  <span class="chip" *ngFor="let m of miembrosDe(a).slice(0, 4); trackBy: trackByCanalId">{{m.nombre}}</span>
                   <span class="tally" *ngIf="a.canales.length > 4">+{{a.canales.length - 4}} más</span>
                   <span class="cfg-card-pertenencia tenue" *ngIf="!a.canales.length">Vacío: ábrelo y agrega destinos.</span>
                 </div>
@@ -892,7 +892,7 @@
               <div class="cfg-subgrupo">
                 <span class="tally">REAL · {{miembrosPorModo(a, 'real').length}}</span>
                 <div class="cfg-miembros" *ngIf="miembrosPorModo(a, 'real').length">
-                  <div class="cfg-miembro" *ngFor="let m of miembrosPorModo(a, 'real')">
+                  <div class="cfg-miembro" *ngFor="let m of miembrosPorModo(a, 'real'); trackBy: trackByCanalId">
                     <ng-container *ngTemplateOutlet="filaMiembro; context: {$implicit: m, acop: a}"></ng-container>
                   </div>
                 </div>
@@ -901,7 +901,7 @@
               <div class="cfg-subgrupo">
                 <span class="tally">PRUEBA · {{miembrosPorModo(a, 'test').length}}</span>
                 <div class="cfg-miembros" *ngIf="miembrosPorModo(a, 'test').length">
-                  <div class="cfg-miembro" *ngFor="let m of miembrosPorModo(a, 'test')">
+                  <div class="cfg-miembro" *ngFor="let m of miembrosPorModo(a, 'test'); trackBy: trackByCanalId">
                     <ng-container *ngTemplateOutlet="filaMiembro; context: {$implicit: m, acop: a}"></ng-container>
                   </div>
                 </div>
@@ -911,10 +911,10 @@
                 <select class="cfg-input" [(ngModel)]="acopAgregarId" [attr.aria-label]="'Destino para agregar a ' + a.nombre">
                   <option [ngValue]="null">Agregar destino…</option>
                   <optgroup label="REAL" *ngIf="faltantesPorModo(a, 'real').length">
-                    <option *ngFor="let c of faltantesPorModo(a, 'real')" [ngValue]="c.id">{{c.nombre}} · {{c.chat_etiqueta || 'SIN DETECTAR'}}</option>
+                    <option *ngFor="let c of faltantesPorModo(a, 'real'); trackBy: trackByCanalId" [ngValue]="c.id">{{c.nombre}} · {{c.chat_etiqueta || 'SIN DETECTAR'}}</option>
                   </optgroup>
                   <optgroup label="PRUEBA" *ngIf="faltantesPorModo(a, 'test').length">
-                    <option *ngFor="let c of faltantesPorModo(a, 'test')" [ngValue]="c.id">{{c.nombre}} · {{c.chat_etiqueta || 'SIN DETECTAR'}}</option>
+                    <option *ngFor="let c of faltantesPorModo(a, 'test'); trackBy: trackByCanalId" [ngValue]="c.id">{{c.nombre}} · {{c.chat_etiqueta || 'SIN DETECTAR'}}</option>
                   </optgroup>
                 </select>
                 <button class="cfg-mini" (click)="agregarCanalAcoplamiento()" [disabled]="!acopAgregarId">AÑADIR</button>

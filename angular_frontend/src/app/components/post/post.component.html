@@ -61,7 +61,7 @@
           <div class="panel-tit">
             <label class="tally" for="post-caption">TEXTO DEL POST</label>
             <select class="plantilla-select" [(ngModel)]="plantillaSeleccionada" aria-label="Plantilla">
-              <option *ngFor="let p of plantillas" [ngValue]="p">{{p.name}} {{p.isDefault ? '(defecto)' : ''}}</option>
+              <option *ngFor="let p of plantillas; trackBy: trackByPlantilla" [ngValue]="p">{{p.name}} {{p.isDefault ? '(defecto)' : ''}}</option>
             </select>
             <button class="mini-btn accente" (click)="usarPlantilla()" [disabled]="!plantillaSeleccionada" title="Usar esta plantilla como texto">USAR</button>
             <button class="mini-ico" (click)="abrirGestionPlantillas()" title="Gestionar plantillas" aria-label="Gestionar plantillas">
@@ -199,7 +199,7 @@
           </div>
 
           <div class="tmdb-resultados" *ngIf="!tmdbTituloSel && tmdbResultados.length">
-            <button class="tmdb-titulo" *ngFor="let h of tmdbResultados" (click)="elegirTmdb(h)">
+            <button class="tmdb-titulo" *ngFor="let h of tmdbResultados; trackBy: trackByTmdbHit" (click)="elegirTmdb(h)">
               <span class="tmdb-poster" [style.backgroundImage]="h.poster_path ? 'url(' + urlTmdb(h.poster_path) + ')' : ''"></span>
               <span class="tmdb-titulo-txt">
                 <span class="tmdb-nombre">{{h.titulo}}</span>
@@ -213,7 +213,7 @@
             <div class="tmdb-sel-tit tally">Imágenes de <strong>{{tmdbTituloSel.titulo}}</strong></div>
             <div class="tmdb-cargando dimmed" *ngIf="tmdbCargandoImagenes">Cargando imágenes…</div>
             <div class="tmdb-imagenes" *ngIf="!tmdbCargandoImagenes">
-              <button class="tmdb-img" *ngFor="let img of tmdbImagenes" (click)="adjuntarTmdb(img)" [disabled]="tmdbAdjuntando > 0" [attr.aria-label]="'Adjuntar ' + img.clase">
+              <button class="tmdb-img" *ngFor="let img of tmdbImagenes; trackBy: trackByTmdbImagen" (click)="adjuntarTmdb(img)" [disabled]="tmdbAdjuntando > 0" [attr.aria-label]="'Adjuntar ' + img.clase">
                 <span class="tmdb-img-bg" [style.backgroundImage]="'url(' + urlTmdb(img.file_path) + ')'"></span>
                 <span class="tmdb-img-clase tally">{{img.clase === 'poster' ? 'Póster' : 'Fondo'}}</span>
               </button>
@@ -230,7 +230,7 @@
           </div>
 
           <div class="filas-botones" *ngIf="links.length">
-            <div class="fila-boton rise-in" *ngFor="let f of links; let i = index">
+            <div class="fila-boton rise-in" *ngFor="let f of links; let i = index; trackBy: trackByLink">
               <div class="mover">
                 <button class="mini-ico" (click)="moverLink(f, -1)" [disabled]="i === 0" aria-label="Subir" title="Subir">
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
@@ -268,13 +268,13 @@
 
           <div class="bollo">
             <div class="bollo-album" *ngIf="imagenes.length" [ngClass]="albumClase">
-              <div class="album-img" *ngFor="let m of albumPreview; let i = index" [style.backgroundImage]="m.url ? 'url(' + m.url + ')' : ''">
+              <div class="album-img" *ngFor="let m of albumPreview; let i = index; trackBy: trackByImagen" [style.backgroundImage]="m.url ? 'url(' + m.url + ')' : ''">
                 <span class="album-mas" *ngIf="albumRestantes && i === albumPreview.length - 1">+{{albumRestantes}}</span>
               </div>
             </div>
             <div class="bollo-caption" [class.vacio-caption]="!caption">{{caption || 'El texto aparecerá aquí…'}}</div>
             <div class="bollo-links" *ngIf="links.length">
-              <div class="bollo-link" *ngFor="let f of links">📥 {{f.texto || 'Enlace'}} — {{f.url}}</div>
+              <div class="bollo-link" *ngFor="let f of links; trackBy: trackByLink">📥 {{f.texto || 'Enlace'}} — {{f.url}}</div>
             </div>
             <div class="bollo-pie" *ngIf="estado === 'publicado'">
               <span class="checks">
@@ -371,7 +371,7 @@
       </div>
 
       <div class="plantillas-lista" *ngIf="!plantillaEditando">
-        <div class="plantilla-fila" *ngFor="let p of plantillas" [class.default]="p.isDefault">
+        <div class="plantilla-fila" *ngFor="let p of plantillas; trackBy: trackByPlantilla" [class.default]="p.isDefault">
           <div class="plantilla-info">
             <span class="plantilla-nombre">{{p.name}} <span class="chip chip-default" *ngIf="p.isDefault">POR DEFECTO</span></span>
             <span class="plantilla-preview">{{p.template.substring(0, 80)}}…</span>

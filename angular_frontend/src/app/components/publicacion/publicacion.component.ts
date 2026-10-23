@@ -12,6 +12,7 @@ import { ColaService } from '../../services/cola.service';
 import { ApiService } from '../../services/api.service';
 import { NavegacionService } from '../../services/navegacion.service';
 import { AcoplamientoService } from '../../services/acoplamiento.service';
+import { CanalService } from '../../services/canal.service';
 import { ConfiguracionService } from '../../services/configuracion.service';
 import { ConjuntoTrabajoService } from '../../services/conjunto-trabajo.service';
 import { TiraContextoComponent } from '../tira-contexto/tira-contexto.component';
@@ -139,6 +140,7 @@ export class PublicacionComponent implements OnInit, OnDestroy {
     private snack: MatSnackBar,
     private navegacion: NavegacionService,
     private acoplamientoSvc: AcoplamientoService,
+    private canalSvc: CanalService,
     private configSvc: ConfiguracionService,
     private trabajo: ConjuntoTrabajoService
   ) {
@@ -170,6 +172,14 @@ export class PublicacionComponent implements OnInit, OnDestroy {
       this.id = nid;
       this.cargar();
     });
+    this.cargarAcoplamientos();
+    this.acoplamientoSvc.cambios$.pipe(takeUntil(this.killed))
+      .subscribe(() => this.cargarAcoplamientos());
+    this.canalSvc.cambios$.pipe(takeUntil(this.killed))
+      .subscribe(() => this.cargarAcoplamientos());
+  }
+
+  private cargarAcoplamientos(): void {
     this.acoplamientoSvc.listar().pipe(takeUntil(this.killed)).subscribe({
       next: (a) => this.acoplamientos = a,
       error: () => undefined
@@ -602,6 +612,22 @@ export class PublicacionComponent implements OnInit, OnDestroy {
       links: linksLen,
       excede: total > this.LIMITE_TELEGRAM
     };
+  }
+
+  trackByLink(_index: number, f: FilaLink): number | string {
+    return f.id ?? f.orden;
+  }
+
+  trackByPlantilla(_index: number, p: CaptionTemplate): number {
+    return p.id;
+  }
+
+  trackByEstreno(_index: number, e: Estreno): string {
+    return e.region;
+  }
+
+  trackByPlataforma(_index: number, p: Plataforma): string {
+    return p.region;
   }
 
   private salvarCaption(): void {

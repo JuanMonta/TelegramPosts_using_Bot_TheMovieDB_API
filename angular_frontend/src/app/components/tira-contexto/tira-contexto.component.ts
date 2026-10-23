@@ -3,6 +3,7 @@ import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { Acoplamiento, destinosDeModo, etiquetaModo } from '../../models/modelos';
 import { AcoplamientoService } from '../../services/acoplamiento.service';
+import { CanalService } from '../../services/canal.service';
 import { ConfiguracionService, ModoTelegram } from '../../services/configuracion.service';
 import { ConjuntoTrabajoService } from '../../services/conjunto-trabajo.service';
 
@@ -29,6 +30,7 @@ export class TiraContextoComponent implements OnInit, OnDestroy {
 
   constructor(
     private acoplamientosSvc: AcoplamientoService,
+    private canalSvc: CanalService,
     private trabajo: ConjuntoTrabajoService,
     private config: ConfiguracionService
   ) {}
@@ -37,10 +39,19 @@ export class TiraContextoComponent implements OnInit, OnDestroy {
     this.trabajo.id$.pipe(takeUntil(this.killed)).subscribe((id) => (this.seleccionado = id));
     this.config.config$.pipe(takeUntil(this.killed)).subscribe((c) => (this.modo = c?.modo ?? null));
     this.config.cargar();
+    this.cargarAcoplamientos(true);
+    this.acoplamientosSvc.cambios$.pipe(takeUntil(this.killed))
+      .subscribe(() => this.cargarAcoplamientos(false));
+    this.canalSvc.cambios$.pipe(takeUntil(this.killed))
+      .subscribe(() => this.cargarAcoplamientos(false));
+  }
+
+  private cargarAcoplamientos(restaurar: boolean): void {
     this.acoplamientosSvc.listar().pipe(takeUntil(this.killed)).subscribe({
       next: (a) => {
         this.acoplamientos = a;
-        this.trabajo.restaurar(a);
+        if (restaurar) this.trabajo.restaurar(a);
+        else this.trabajo.limpiarSiFalta(a);
       },
       error: () => undefined
     });
@@ -49,6 +60,10 @@ export class TiraContextoComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this.killed.next();
     this.killed.complete();
+  }
+
+  trackByAcoplamientoId(_i: number, a: Acoplamiento): number {
+    return a.id;
   }
 
   elegir(id: number | null): void {

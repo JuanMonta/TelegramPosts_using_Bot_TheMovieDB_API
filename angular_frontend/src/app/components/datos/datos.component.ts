@@ -783,6 +783,14 @@ export class DatosComponent implements OnInit, OnDestroy {
     return r.id;
   }
 
+  trackRuta(_i: number, f: FsItem): string {
+    return f.ruta;
+  }
+
+  trackTabla(_i: number, t: { tabla: string }): string {
+    return t.tabla;
+  }
+
   urlDescarga(id: number): string {
     return this.datos.urlDescarga(id);
   }

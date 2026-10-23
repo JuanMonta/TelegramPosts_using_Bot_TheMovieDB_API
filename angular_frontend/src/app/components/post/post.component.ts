@@ -12,6 +12,7 @@ import { ColaService } from '../../services/cola.service';
 import { ApiService } from '../../services/api.service';
 import { NavegacionService } from '../../services/navegacion.service';
 import { AcoplamientoService } from '../../services/acoplamiento.service';
+import { CanalService } from '../../services/canal.service';
 import { ConfiguracionService } from '../../services/configuracion.service';
 import { ConjuntoTrabajoService } from '../../services/conjunto-trabajo.service';
 import { TiraContextoComponent } from '../tira-contexto/tira-contexto.component';
@@ -120,6 +121,7 @@ export class PostComponent implements OnInit, OnDestroy {
     private snack: MatSnackBar,
     private navegacion: NavegacionService,
     private acoplamientoSvc: AcoplamientoService,
+    private canalSvc: CanalService,
     private configSvc: ConfiguracionService,
     private trabajo: ConjuntoTrabajoService
   ) {}
@@ -135,11 +137,19 @@ export class PostComponent implements OnInit, OnDestroy {
       this.id = nid;
       this.cargar();
     });
+    this.cargarAcoplamientos();
+    this.acoplamientoSvc.cambios$.pipe(takeUntil(this.killed))
+      .subscribe(() => this.cargarAcoplamientos());
+    this.canalSvc.cambios$.pipe(takeUntil(this.killed))
+      .subscribe(() => this.cargarAcoplamientos());
+    this.cargarPlantillas();
+  }
+
+  private cargarAcoplamientos(): void {
     this.acoplamientoSvc.listar().pipe(takeUntil(this.killed)).subscribe({
       next: (a) => (this.acoplamientos = a),
       error: () => undefined
     });
-    this.cargarPlantillas();
   }
 
   ngOnDestroy(): void {
@@ -377,6 +387,18 @@ export class PostComponent implements OnInit, OnDestroy {
 
   trackByImagen(_i: number, m: PublicacionMedia): number {
     return m.id;
+  }
+  trackByLink(_i: number, f: FilaLink): number | string {
+    return f.id ?? f.orden;
+  }
+  trackByPlantilla(_i: number, p: CaptionTemplate): number {
+    return p.id;
+  }
+  trackByTmdbHit(_i: number, h: TmdbHit): string {
+    return `${h.media_type}:${h.id}`;
+  }
+  trackByTmdbImagen(_i: number, img: TmdbImagen): string {
+    return `${img.clase}:${img.file_path}`;
   }
 
   /** Evita parpadeos: agrupa los movimientos seguidos en un solo guardado. */
