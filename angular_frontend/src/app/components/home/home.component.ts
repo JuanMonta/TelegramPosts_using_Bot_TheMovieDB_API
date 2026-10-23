@@ -3,7 +3,7 @@ import { NavigationEnd, Router } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { Subject, TimeoutError } from 'rxjs';
-import { takeUntil, timeout } from 'rxjs/operators';
+import { filter, takeUntil, timeout } from 'rxjs/operators';
 import { PublicacionesService } from '../../services/publicaciones.service';
 import { TmdbService } from '../../services/tmdb.service';
 import { ApiService } from '../../services/api.service';
@@ -97,8 +97,7 @@ export class HomeComponent implements OnInit, OnDestroy {
   comentariosPost: Comentario[] = [];
   cargandoComentarios = false;
   private killed = new Subject<void>();
-  /** Distingue la carga inicial de las vueltas posteriores a la ruta. */
-  private primeraCarga = true;
+  private ultimaUrl = '/';
   // cola de publicaciones programadas (modal)
   colaAbierta = false;
   colaItems: ColaItem[] = [];
@@ -227,18 +226,22 @@ export class HomeComponent implements OnInit, OnDestroy {
     }
     this.cargar();
     this.refrescarColaSilencioso();
-    // La instancia se reutiliza (RouteReuseStrategy). Al volver de /publicacion/:id
-    // se refrescan los datos en silencio conservando el estado de la UI
-    // (selección, filtros, búsqueda, vista, panel de comentarios).
-    this.router.events.pipe(takeUntil(this.killed)).subscribe((event) => {
-      if (event instanceof NavigationEnd && event.url === '/') {
-        if (this.primeraCarga) {
-          this.primeraCarga = false;
-        } else {
-          this.refrescarDatos();
-          // el reattache resetea scrollTop a 0: lo restauramos tras montar la vista.
-          setTimeout(() => this.restaurarScrollLista(), 0);
+    this.ultimaUrl = this.router.url.split(/[?#]/)[0] || '/';
+    this.router.events.pipe(
+      filter((event): event is NavigationEnd => event instanceof NavigationEnd),
+      takeUntil(this.killed)
+    ).subscribe((event) => {
+      const url = event.urlAfterRedirects.split(/[?#]/)[0] || '/';
+      const volvioAHome = url === '/' && this.ultimaUrl !== '/';
+      this.ultimaUrl = url;
+      if (volvioAHome) {
+        if (this.navegacion.abrirCfgAlLlegar) {
+          this.navegacion.abrirCfgAlLlegar = false;
+          setTimeout(() => this.abrirCfg(), 0);
         }
+        this.refrescarDatos();
+        // el reattache resetea scrollTop a 0: lo restauramos tras montar la vista.
+        setTimeout(() => this.restaurarScrollLista(), 0);
       }
     });
   }
@@ -292,9 +295,8 @@ export class HomeComponent implements OnInit, OnDestroy {
         this.sin = catalogo.sin;
         this.catalogo = catalogo.items;
         this.porTitulo = porTitulo;
-        // conserva el post seleccionado si sigue existiendo; si no, cae de nuevo al panel.
-        if (this.panel && !this.catalogo.some((t) => t.id === this.panel!.id)) {
-          this.panel = this.elegirPanel();
+        if (this.panel) {
+          this.panel = this.catalogo.find((t) => t.id === this.panel!.id) ?? this.elegirPanel();
         }
         if (this.panelComentariosAbierto && this.panel) {
           this.cargarComentariosDe(this.panel);
@@ -657,6 +659,27 @@ export class HomeComponent implements OnInit, OnDestroy {
   trackByCatalogoId(_index: number, t: CatalogoFila): number {
     return t.id;
   }
+  trackByHit(_index: number, h: TmdbHit): string {
+    return `${h.media_type}:${h.id}`;
+  }
+  trackByComentarioId(_index: number, c: Comentario): number {
+    return c.id;
+  }
+  trackByPublicacionId(_index: number, t: CatalogoFila): number {
+    return t.publicacion_id ?? t.id;
+  }
+  trackByBotId(_index: number, b: Bot): number {
+    return b.id;
+  }
+  trackByCanalId(_index: number, c: Canal): number {
+    return c.id;
+  }
+  trackByAcoplamientoId(_index: number, a: Acoplamiento): number {
+    return a.id;
+  }
+  trackByAdminBotId(_index: number, b: AdminBotDetectado): number {
+    return b.id;
+  }
   private colaFechaTexto(i: ColaItem, ...claves: (keyof ColaItem)[]): string {
     for (const k of claves) {
       const v = i[k];
@@ -921,7 +944,7 @@ export class HomeComponent implements OnInit, OnDestroy {
           this.nuevoCanalBotDetectar = null;
           this.guardarBotDetectar();
         }
-        // los canales que usaban ese bot quedan sin bot: se refrescan en el próximo listar
+        this.cargarAcoplamientos();
       },
       error: (e: HttpErrorResponse) => this.snack.open(this.api.mensajeDeError(e), 'OK', { duration: 6000 })
     });
@@ -1175,7 +1198,9 @@ export class HomeComponent implements OnInit, OnDestroy {
       next: () => {
         this.acoplamientos = this.acoplamientos.filter((a) => a.id !== id);
         if (this.acoplamientoSeleccionado === id) this.acoplamientoSeleccionado = null;
+        this.trabajo.limpiarSiFalta(this.acoplamientos);
         this.acopBorrando = null;
+        this.refrescarDatos();
       },
       error: (e: HttpErrorResponse) => this.snack.open(this.api.mensajeDeError(e), 'OK', { duration: 6000 })
     });
@@ -1196,6 +1221,7 @@ export class HomeComponent implements OnInit, OnDestroy {
         this.acoplamientos = this.acoplamientos.map((x) => (x.id === act.id ? act : x));
         this.cancelarRenombrarAcoplamiento();
         this.snack.open('Conjunto renombrado', '✓', { duration: 2500 });
+        this.refrescarDatos();
       },
       error: (e: HttpErrorResponse) => this.snack.open(this.api.mensajeDeError(e), 'OK', { duration: 6000 })
     });

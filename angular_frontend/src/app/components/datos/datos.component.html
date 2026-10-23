@@ -316,7 +316,7 @@
 
           <ng-container *ngIf="migAnalisis.ok">
             <div class="dt-mig-lista">
-              <div class="dt-mig-item" *ngFor="let t of migAnalisis.tablas">
+              <div class="dt-mig-item" *ngFor="let t of migAnalisis.tablas; trackBy: trackTabla">
                 <span class="mono">{{t.tabla}}</span><span class="dt-mig-filas">{{t.filas}} fila(s)</span>
               </div>
             </div>
@@ -344,7 +344,7 @@
             <span class="dt-prueba-det">{{migResultado.mensaje}}</span>
           </div>
           <div class="dt-mig-lista">
-            <div class="dt-mig-item" *ngFor="let t of migResultado.tablas">
+            <div class="dt-mig-item" *ngFor="let t of migResultado.tablas; trackBy: trackTabla">
               <span class="mono">{{t.tabla}}</span>
               <span class="dt-mig-filas">{{t.filas_origen}} → {{t.filas_destino}}</span>
               <span class="dt-chip" [ngClass]="t.ok ? 'ok' : 'fallo'">{{t.ok ? 'OK' : 'NO CUADRA'}}</span>
@@ -511,15 +511,15 @@
       </div>
 
       <div class="dt-picker-atajos">
-        <button class="dt-mini" type="button" *ngFor="let s of picker.sitios" (click)="abrirRuta(s.ruta)">{{s.nombre}}</button>
-        <button class="dt-mini" type="button" *ngFor="let u of picker.unidades" (click)="abrirRuta(u.ruta)">{{u.nombre}}</button>
+        <button class="dt-mini" type="button" *ngFor="let s of picker.sitios; trackBy: trackRuta" (click)="abrirRuta(s.ruta)">{{s.nombre}}</button>
+        <button class="dt-mini" type="button" *ngFor="let u of picker.unidades; trackBy: trackRuta" (click)="abrirRuta(u.ruta)">{{u.nombre}}</button>
       </div>
 
       <div class="dt-picker-lista">
         <div *ngIf="picker.cargando" class="dt-picker-vacio"><span class="spinner"></span> Abriendo…</div>
         <div *ngIf="!picker.cargando && picker.error" class="dt-picker-vacio dt-error">{{picker.error}}</div>
         <div *ngIf="!picker.cargando && !picker.error && !picker.carpetas.length" class="dt-picker-vacio">No hay subcarpetas aquí. Puedes usar esta carpeta.</div>
-        <button class="dt-picker-item" type="button" *ngFor="let c of picker.carpetas" (click)="abrirRuta(c.ruta)">
+        <button class="dt-picker-item" type="button" *ngFor="let c of picker.carpetas; trackBy: trackRuta" (click)="abrirRuta(c.ruta)">
           <span class="dt-picker-icono">📁</span>
           <span class="mono">{{c.nombre}}</span>
         </button>

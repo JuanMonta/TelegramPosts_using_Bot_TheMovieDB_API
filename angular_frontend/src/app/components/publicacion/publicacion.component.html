@@ -100,7 +100,7 @@
           <div *ngIf="estrenos.length" class="ficha-dato">
             <span class="tally etiqueta">ESTRENOS</span>
             <div class="estrenos">
-              <span *ngFor="let e of estrenos" class="chip" [title]="estrenoTip(e)">
+              <span *ngFor="let e of estrenos; trackBy: trackByEstreno" class="chip" [title]="estrenoTip(e)">
                 {{e.region}} · <ng-container *ngFor="let f of e.fechas | slice:0:1">{{f.certificacion ? f.certificacion + ' · ' : ''}}{{fechaLabel(f.fecha)}}</ng-container>
               </span>
             </div>
@@ -108,7 +108,7 @@
           <div *ngIf="plataformas.length" class="ficha-dato">
             <span class="tally etiqueta">DISPONIBLE EN</span>
             <div class="estrenos">
-              <span *ngFor="let p of plataformas" class="chip chip-format">{{bandera(p.region)}} {{p.region}}: {{p.proveedores.slice(0, 3).join(', ')}}</span>
+              <span *ngFor="let p of plataformas; trackBy: trackByPlataforma" class="chip chip-format">{{bandera(p.region)}} {{p.region}}: {{p.proveedores.slice(0, 3).join(', ')}}</span>
             </div>
           </div>
         </div>
@@ -124,7 +124,7 @@
         </div>
         <div class="bollo-caption" [class.vacio-caption]="!caption" [attr.data-gr]="estado">{{caption || 'El texto aparecerá aquí…'}}</div>
         <div class="bollo-links" *ngIf="links.length">
-          <div class="bollo-link" *ngFor="let f of links">📥 {{f.texto || 'Enlace'}} — {{f.url}}</div>
+          <div class="bollo-link" *ngFor="let f of links; trackBy: trackByLink">📥 {{f.texto || 'Enlace'}} — {{f.url}}</div>
         </div>
         <div class="bollo-pie" *ngIf="estado === 'publicado'">
           <span class="checks">
@@ -145,7 +145,7 @@
     <div class="compositor-tit">
       <label for="caption" class="tally">TEXTO DEL POST</label>
       <select class="plantilla-select" [(ngModel)]="plantillaSeleccionada" (ngModelChange)="seleccionarPlantilla($event)">
-        <option *ngFor="let p of plantillas" [ngValue]="p">
+        <option *ngFor="let p of plantillas; trackBy: trackByPlantilla" [ngValue]="p">
           {{p.name}} {{p.isDefault ? '(defecto)' : ''}}
         </option>
       </select>
@@ -184,7 +184,7 @@
       </div>
 
       <div class="filas-botones" *ngIf="links.length">
-        <div class="fila-boton rise-in" *ngFor="let f of links; let i = index">
+        <div class="fila-boton rise-in" *ngFor="let f of links; let i = index; trackBy: trackByLink">
           <div class="mover">
             <button class="mini-ico" (click)="moverLink(f, -1)" [disabled]="i === 0" aria-label="Subir" title="Subir">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
@@ -311,7 +311,7 @@
 
       <!-- lista -->
       <div class="plantillas-lista" *ngIf="!plantillaEditando">
-        <div class="plantilla-fila" *ngFor="let p of plantillas" [class.default]="p.isDefault">
+        <div class="plantilla-fila" *ngFor="let p of plantillas; trackBy: trackByPlantilla" [class.default]="p.isDefault">
           <div class="plantilla-info">
             <span class="plantilla-nombre">{{p.name}} <span class="chip chip-default" *ngIf="p.isDefault">POR DEFECTO</span></span>
             <span class="plantilla-preview">{{p.template.substring(0, 80)}}…</span>
